@@ -3,12 +3,6 @@
  */
 package com.googlecode.directory_scanner.directory_scanner;
 
-import java.io.IOException;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-
 import org.apache.log4j.Level;
 
 /**
@@ -27,7 +21,7 @@ public class DirectoryScanner {
 	public static void main(String[] args) {
 		
 		System.out.println("creating treewalker");
-		TreeWalker fileWalker = new TreeWalker();
+		Walker fileWalker = new Walker();
 		
 		
 		if(args != null) {
@@ -35,32 +29,32 @@ public class DirectoryScanner {
 			int num = 0;
 			
 			for(String s : args) {				
-				DatabaseWorker.getLogger().log(Level.INFO, "processing args["+num+"]="+s);
+				Worker.getLogger().log(Level.INFO, "processing args["+num+"]="+s);
 				
 				if(commmand == null) {
 					if("scan".equals(s) || "rescan".equals(s) || "check_exists".equals(s)) {
 						commmand = s;
 					}
 					else if ("create_tables".equals(s)) {
-						DatabaseWorker.createTables();
+						Worker.getSingelton().createTables();
 					}
 					else if("reset_done_directories".equals(s)) {
-						DatabaseWorker.resetDoneDirectories();
+						Worker.getSingelton().resetDoneDirectories();
 					}
 					else printHelp(true);
 				}
 				else if("scan".equals(commmand)) {
-					scanPath(s, fileWalker);
+					fileWalker.scanPath(s);
 				}
 				else if("rescan".equals(commmand)) {
-					DatabaseWorker.prepareRescan(s);
-					scanPath(s, fileWalker);
+					Worker.getSingelton().forgetPath(s);
+					fileWalker.scanPath(s);
 				}
 				else if("check_exists".equals(commmand)) {
-					DatabaseWorker.checkExistence(s);
+					Worker.getSingelton().checkExistence(s);
 				}
 				else {
-					DatabaseWorker.getLogger().log(Level.ERROR, "unhandled stated, please share the call that caused this output with the developers!");
+					Worker.getLogger().log(Level.ERROR, "unhandled stated, please share the call that caused this output with the developers!");
 				}
 
 				num++;
@@ -72,19 +66,7 @@ public class DirectoryScanner {
 		
 		System.out.println("");
 		System.out.println("");
-		DatabaseWorker.getLogger().log(Level.INFO ,"end of DirectoryScanner -> static void main");
-	}
-	
-	private static void scanPath(String pathString, TreeWalker fileWalker) {
-		try {
-			Path path = FileSystems.getDefault().getPath(pathString);
-			Files.walkFileTree(path, fileWalker);
-		
-		} catch (InvalidPathException e) {
-			DatabaseWorker.getLogger().log(Level.ERROR, "invalid path='"+pathString+"'", e);
-		} catch (IOException e) {
-			DatabaseWorker.getLogger().log(Level.ERROR, "could not read path='"+pathString+"'", e);
-		}
+		Worker.getLogger().log(Level.INFO ,"end of DirectoryScanner -> static void main");
 	}
 	
 	private static void printHelp(boolean error) {

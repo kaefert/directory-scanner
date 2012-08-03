@@ -1,21 +1,11 @@
 package com.googlecode.directory_scanner.directory_scanner;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.FileSystems;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.NoSuchAlgorithmException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -27,455 +17,220 @@ import org.apache.log4j.Logger;
 
 public class Worker {
 
-    public static Logger getLogger() {
-	return getSingelton().logger;
-    }
-
-    private static Worker singelton;
-
-    public static Worker getSingelton() {
-	if (singelton == null)
-	    singelton = new Worker();
-	return singelton;
-    }
-
-    private Integer checkDoneFiles, checkDoneDirectories;
-
     private Logger logger;
+    private Properties config;
+    private DatabaseHandler databaseHandler;
 
-    private Connection connection = null;
+    private Integer checkDoneFiles;
+    private Long skipDirectoriesScannedAgo;
+    private Date skipDirectoriesDoneAfter = null;
 
-    private PreparedStatement insertScannedFile, selectSizeForPath, updateScannedFile, selectAllPathSize, insertDirectoryDone, selectAllDoneDirectories,
-    deleteSubDirectories, selectFilesLike, deleteSingleFile;
+    public Worker(Logger logger, Properties config) {
+	this.logger = logger;
+	this.config = config;
+	this.databaseHandler = new DatabaseHandler(this.config, logger);
 
-    private Map<String, Long> scannedFiles;
-
-    private Set<String> doneDirectories;
-
-    Properties configFile;
-
-    private PreparedStatement getDeleteSubDirectories() throws SQLException {
-	if (deleteSubDirectories == null) {
-	    deleteSubDirectories = getConnection().prepareStatement(configFile.getProperty("sqlStatement_delete_done_directories_below"));
-	}
-	return deleteSubDirectories;
+	checkDoneFiles = Integer.valueOf(config.getProperty("doneFiles"));
+	// checkDoneDirectories =
+	// Integer.valueOf(config.getProperty("doneDirectories"));
+	skipDirectoriesScannedAgo = Long.valueOf(config.getProperty("skipDirectoriesScannedAgo"));
+	if (skipDirectoriesScannedAgo >= 0)
+	    skipDirectoriesDoneAfter = new Date(new Date().getTime() + skipDirectoriesScannedAgo);
+	// if(checkDoneDirectories.equals(
     }
 
-    private PreparedStatement getDeleteSingleFile() throws SQLException {
-	if (deleteSingleFile == null) {
-	    deleteSingleFile = getConnection().prepareStatement(configFile.getProperty("sqlStatement_delete_single_file"));
-	}
-	return deleteSingleFile;
-    }
+    public void scanPath(String pathString) {
+	logger.info("scanning path: " + pathString);
+	databaseHandler.insertDirectory(pathString, null, false);
+	new PathWalker(logger, this, pathString);
 
-    private Map<String, Long> getScannedFiles() {
-	if (scannedFiles == null) {
-	    logger.log(Level.INFO, "Start building map of existing files");
-	    try {
-		selectAllPathSize = getConnection().prepareStatement(configFile.getProperty("sqlStatement_select_all_files"));
-		scannedFiles = new HashMap<String, Long>();
-		ResultSet result = selectAllPathSize.executeQuery();
-		while (result.next()) {
-		    scannedFiles.put(result.getString("path"), result.getLong("size"));
-		}
-		logger.log(Level.INFO, "Finished building scannedFiles map");
-
-	    } catch (SQLException e) {
-		logger.log(Level.ERROR, "could not build scannedFiles map", e);
+	if (failedVisits != null && failedVisits.size() > 0) {
+	    logger.info("PathWalker finished, printing failedVisits errors now:");
+	    for (Map.Entry<Path, IOException> entry : failedVisits.entrySet()) {
+		logger.warn(entry.getKey(), entry.getValue());
 	    }
-
+	    failedVisits.clear();
+	} else {
+	    logger.info("PathWalker finished, no failedVisits recorded.");
 	}
-	return scannedFiles;
+
     }
 
-    private Set<String> getDoneDirectories() {
-	if (doneDirectories == null) {
-	    logger.log(Level.INFO, "Will now load set of doneDirectories");
-	    doneDirectories = new HashSet<String>();
-	    try {
-		selectAllDoneDirectories = getConnection().prepareStatement(configFile.getProperty("sqlStatement_select_all_done_directories"));
-		ResultSet result = selectAllDoneDirectories.executeQuery();
-		while (result.next()) {
-		    doneDirectories.add(result.getString("path"));
-		}
-	    } catch (SQLException e) {
-		// TODO Auto-generated catch block
-		e.printStackTrace();
-	    }
+    public boolean preScanDirectory(Path dir, BasicFileAttributes attrs, String scanPath) {
 
-	    logger.log(Level.INFO, "finished loading doneDirectories");
-	}
-	return doneDirectories;
-    }
+	if (skipDirectoriesScannedAgo.equals(-1)) {
+	    return false;
+	} else {
+	    Date finished = databaseHandler.getDirectoryDoneTime(dir.toString(), databaseHandler.getDirectory(scanPath));
 
-    private Connection getConnection() {
-	return getConnection(configFile.getProperty("databaseName"));
-    }
-
-    private Connection getConnection(String databaseName) {
-	if (connection == null) {
-	    try {
-		Class.forName(configFile.getProperty("databaseDriver")).newInstance();
-		connection = DriverManager.getConnection(configFile.getProperty("databaseUrl") + databaseName, configFile.getProperty("databaseUser"),
-		configFile.getProperty("databasePassword"));
-		logger.log(Level.INFO, "Connected to the database \"" + databaseName + "\"");
-
-	    } catch (Exception e) {
-		e.printStackTrace();
+	    if (finished != null && (skipDirectoriesScannedAgo < -1 || finished.after(skipDirectoriesDoneAfter))) {
+		logger.log(Level.INFO, "skipping done directory: " + dir.toString());
+		return true;
+	    } else {
+		logger.log(Level.INFO, "conditions for directory-skip not met, continue processing -> " + dir.toString());
+		return false;
 	    }
 	}
-	return connection;
     }
 
-    private Worker() {
-
-	logger = Logger.getLogger("DatabaseWorkerLogger");
-
-	// tried out java.util.logging... seems like crap to me
-	// getLogger("DatabaseWorkerLogger");
-	// logger.setLevel(Level.FINEST);
-	// logger.entering(this.getClass().getName(), "Constructor");
-	// logger.info("logger.info");
-	// logger.fine("logger.fine");
-	// logger.finer("logger.finer");
-	// logger.finest("logger.finest");
-	// logger.log(Level.FINEST, "logger.log FINEST");
-	// logger.log(Level.FINER, "logger.log FINER");
-	// logger.log(Level.FINE, "logger.log FINE");
-	// logger.log(Level.INFO, "logger.log INFO");
-	// logger.log(Level.WARNING, "logger.log WARNING");
-	// logger.log(Level.SEVERE, "logger.log SEVERE");
-
-	// logger.log(Level.INFO, "logger.log INFO");
-
-	configFile = findConfigFile();
-
-	checkDoneFiles = Integer.valueOf(configFile.getProperty("doneFiles"));
-	checkDoneDirectories = Integer.valueOf(configFile.getProperty("doneDirectories"));
-
-	logger.log(Level.INFO, "finished DatabaseWriter constructor");
+    public void postScanDirectory(Path dir, IOException exc, String scanPath) {
+	databaseHandler.insertDirectory(dir.toString(), databaseHandler.getDirectory(scanPath), true);
     }
 
-    public void createDatabase() {
-	try {
-	    getConnection("").prepareStatement(configFile.getProperty("createDatabase")).execute();
-	    logger.info("created database");
-	} catch (SQLException e) {
-	    logger.error("could not create tables", e);
-	}
-    }
+    public void scanFile(Path file, BasicFileAttributes attr, String scanPath) {
 
-    public void createTables() {
-	try {
-	    getConnection().prepareStatement(configFile.getProperty("createTableStatement_Files")).execute();
-	    getConnection().prepareStatement(configFile.getProperty("createTableStatement_directories_done")).execute();
-	    logger.info("created tables");
-	} catch (SQLException e) {
-	    logger.error("could not create tables", e);
-	}
-    }
-
-    public void dropTables() {
-	try {
-	    getConnection().prepareStatement(configFile.getProperty("dropTableStatement_Files")).execute();
-	    getConnection().prepareStatement(configFile.getProperty("dropTableStatement_directories_done")).execute();
-	    logger.info("droped tables");
-	} catch (SQLException e) {
-	    logger.error("could not drop tables", e);
-	}
-    }
-
-    public void scanFile(Path file, BasicFileAttributes attr) {
-
-	String path = file.toString();
+	String fullPath = file.toString();
 	String fileName = file.getFileName().toString();
 	String directory = file.getParent().toString();
+
+	Integer dirId = databaseHandler.getDirectory(directory);
 
 	boolean scanned = false, sized = false;
 
 	if (checkDoneFiles.equals(1)) {
-	    Long scannedSize = getScannedFiles().get(path);
+	    Long scannedSize = databaseHandler.getFileSize(fullPath);
 	    if (scannedSize != null) {
 		scanned = true;
 		if (scannedSize.equals(attr.size()))
 		    sized = true;
 	    }
-	} else if (checkDoneFiles.equals(2)) {
-	    // much to slow (check the database for each file if it already has
-	    // been
-	    // scanned)
-
-	    try {
-		if (selectSizeForPath == null) {
-		    selectSizeForPath = getConnection().prepareStatement(configFile.getProperty("sqlStatement_select_size"));
-		}
-
-		selectSizeForPath.setString(1, file.toString());
-
-		ResultSet result = selectSizeForPath.executeQuery();
-
-		if (result.next()) {
-		    scanned = true;
-		    if (attr.size() == result.getLong("size")) {
-			sized = true;
-		    }
-		}
-		if (result.next()) {
-		    logger.log(Level.WARN, "WARNING: path stored multiple times! This code does not process this");
-		}
-
-	    } catch (SQLException e) {
-		logger.error("could not check if file has been scanned previously", e);
-	    }
-
 	}
 
-	// if(result.
-	if (!sized) {
+	if (!scanned || !sized) {
 	    try {
 		String sha1 = ChecksumSHA1.getSHA1Checksum(file);
-
 		logger.log(Level.INFO, "sha1 = " + sha1);
-
-		if (scanned) {
-		    logger.log(Level.INFO, "has been scanned but changed filesize. scanned -> updating.");
-
-		    if (updateScannedFile == null) {
-			updateScannedFile = getConnection().prepareStatement(configFile.getProperty("sqlStatement_update_file"));
-		    }
-
-		    updateScannedFile.setString(1, sha1);
-		    updateScannedFile.setTimestamp(2, new Timestamp(new java.util.Date().getTime()));
-		    updateScannedFile.setLong(3, attr.size());
-		    updateScannedFile.setString(4, path);
-
-		    updateScannedFile.execute();
-
-		} else {
-		    logger.log(Level.INFO, "has not been scanned yed. scanned -> inserting.");
-
-		    if (insertScannedFile == null) {
-			insertScannedFile = getConnection().prepareStatement(configFile.getProperty("sqlStatement_insert_file"));
-		    }
-
-		    insertScannedFile.setString(1, sha1);
-		    insertScannedFile.setTimestamp(2, new Timestamp(new java.util.Date().getTime()));
-		    // statement.setDate(2, new java.sql.Date(new
-		    // java.util.Date().getTime()));
-		    insertScannedFile.setString(3, path);
-		    insertScannedFile.setLong(4, attr.size());
-
-		    insertScannedFile.execute();
-		}
-		if (checkDoneFiles.equals(1))
-		    getScannedFiles().put(path, attr.size());
+		databaseHandler.insertFile(fullPath, fileName, dirId, databaseHandler.getDirectory(scanPath), attr.size(), sha1);
 
 	    } catch (NoSuchAlgorithmException | IOException e) {
 		logger.error("failed to calculate sha1 checksum", e);
-	    } catch (SQLException e) {
-		logger.error("failed to write row for this file into database. This is expected behaviour if you deactivated the check for doneFiles", e);
 	    }
 
 	} else {
 	    logger.log(Level.INFO, "has already been scanned and has not changed size. Will ignore this file.");
 	}
+
     }
 
-    public boolean decideDirectorySkip(Path dir, BasicFileAttributes attrs) {
-	if (checkDoneDirectories.equals(1) && getDoneDirectories().contains(dir.toString())) {
-	    logger.log(Level.INFO, "skipping done directory: " + dir.toString());
-	    return true;
-	} else {
-	    logger.log(Level.INFO, "directory not yet done, continue processing -> " + dir.toString());
-	    return false;
-	}
+    private HashMap<Path, IOException> failedVisits = new HashMap<>();
+
+    public void visitFileFailed(Path path, IOException exc) {
+	failedVisits.put(path, exc);
+	logger.warn(path, exc);
     }
 
-    public void finishedDirectory(Path dir) {
-
-	logger.log(Level.INFO, "finished processing directory: " + dir.toString());
-
-	try {
-	    getDeleteSubDirectories().setString(1, dir.toString() + "%");
-	    getDeleteSubDirectories().execute();
-
-	    if (insertDirectoryDone == null) {
-		insertDirectoryDone = getConnection().prepareStatement(configFile.getProperty("sqlStatement_insert_done_directory"));
-	    }
-	    insertDirectoryDone.setString(1, dir.toString());
-	    insertDirectoryDone.execute();
-
-	} catch (SQLException e) {
-	    logger.error("failed to delete/insert finishedDirectory", e);
-	    e.printStackTrace();
-	}
-
-	if (checkDoneDirectories == 1)
-	    getDoneDirectories().add(dir.toString());
+    public void setSkipDirectoriesDoneAfter(Date date) {
+	SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+	logger.trace("Setting skipDirectoriesDoneAfter = " + formatter.format(date));
+	skipDirectoriesDoneAfter = date;
+	skipDirectoriesScannedAgo = Math.max(0, new Date().getTime() - date.getTime());
     }
 
-    public void infoOnPath(String path) {
-	logger.log(Level.INFO, "printing what I got on the path '" + path + "%' ");
+    public void forgetDoneDirectories() {
+	databaseHandler.forgetDoneDirectories();
     }
 
     public void forgetPath(String s) {
-	logger.log(Level.INFO, "Deleting '" + s + "%' from doneDirectories");
-	try {
-	    getDeleteSubDirectories().setString(1, s + "%");
-	    getDeleteSubDirectories().execute();
-	} catch (SQLException e) {
-	    logger.error("failed to delete directories", e);
+	databaseHandler.forgetDirectoryTree(s);
+    }
+
+    public void printInfoOn(String text) {
+
+	SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+
+	for (Map.Entry<String, Integer> entry : databaseHandler.getFileIds().entrySet()) {
+	    if (entry.getKey().startsWith(text)) {
+		Integer id = entry.getValue();
+		Long filesize = databaseHandler.getFileSizes().get(id);
+		Date scandate = databaseHandler.getFileScandates().get(id);
+		logger.info("found file: id=\"" + id + "\", scandate=\"" + scandate == null ? "null" : formatter.format(scandate) + "\", size=\"" + filesize
+		+ "\", path=\"" + entry.getKey() + "\"");
+	    }
 	}
     }
 
-    public void resetDoneDirectories() {
-	try {
-	    getConnection().prepareStatement(configFile.getProperty("sqlStatement_delete_all_done_directories")).execute();
-	} catch (SQLException e) {
-	    logger.log(Level.ERROR, "delete done directories failed", e);
+    public class ReportMatch {
+	public String sha1;
+	public long size;
+	public HashSet<String> paths;
+	public HashSet<Integer> fileIds;
+	public int sawPath1, sawPath2;
+	
+	public ReportMatch(String sha1) {
+	    this.sha1 = sha1;
+	    this.fileIds = databaseHandler.getFileSha1s().get(sha1);
+	    this.paths = new HashSet<>(2);
+	    this.size = -1;
+	    this.sawPath1 = 0;
+	    this.sawPath2 = 0;
 	}
     }
+    
+    /**
+     * 
+     * @param path1
+     *            if not null only duplicates that have at least 1 instance
+     *            below this path are printed
+     * 
+     * @param path2
+     *            see path1. if equal path1 only duplicates that have at least 2
+     *            instances below given path are printed.
+     * 
+     * @param opposite
+     *            if false behaviour as drescribed in description for path1&2 if
+     *            true, path1 & path2 must not be null, and any files are
+     *            printed, that exist in path1 but not in path2
+     * 
+     */
+    public HashSet<ReportMatch> findDuplicates(String path1, String path2, boolean opposite) {
+	Set<String> sha1s = opposite ? databaseHandler.getFileSha1s().keySet() : databaseHandler.getNonUniqueSha1s();
+	HashSet<ReportMatch> matches = new HashSet<>();
+	for (String sha1 : sha1s) {
+	    ReportMatch match = new ReportMatch(sha1);
+	    for (Integer fileId : match.fileIds) {
 
-    public void checkExistence(String s) {
-	logger.log(Level.INFO, "Checking existence of files like '" + s + "%'");
-	try {
-	    if (selectFilesLike == null) {
-		selectFilesLike = getConnection().prepareStatement(configFile.getProperty("sqlStatement_select_all_files_like"));
+		String filePath = databaseHandler.getFilePaths().get(fileId);
+		long fileSizeCurrent = databaseHandler.getFileSizes().get(fileId);
+		if (match.size == -1) {
+		    match.size = fileSizeCurrent;
+		} else if (match.size != fileSizeCurrent) {
+		    logger.fatal("FOUND COLLISION - FILES WITH DIFFERENT SIZE BUT SAME SHA1 HASH = " + sha1 + "; size1=" + match.size + "; size2="
+		    + fileSizeCurrent + "; path1=" + match.paths.iterator().next() + "; path2=" + filePath);
+		}
+
+		if (path1 != null && filePath.startsWith(path1))
+		    match.sawPath1++;
+		if (path2 != null && filePath.startsWith(path2)) {
+		    match.sawPath2++;
+		    if (opposite)
+			break;
+		}
+
+		match.paths.add(filePath);
 	    }
 
-	    selectFilesLike.setString(1, s + "%");
-	    ResultSet result = selectFilesLike.executeQuery();
-	    while (result.next()) {
-		String pathString = result.getString("path");
-		long size = result.getLong("size");
-		try {
-		    Path path = FileSystems.getDefault().getPath(pathString);
-		    File file = path.toFile();
-		    if (!file.exists()) {
-			logger.log(Level.WARN, "the file@path='" + pathString + "' --> does not exist!");
-//			deletePathFromDB(pathString);
-		    } else if (file.length() != size) {
-			logger.log(Level.WARN, "the file@path='" + pathString + "' has changed size since it was last scanned. please use rescan to update!");
-		    } else {
-			logger.log(Level.INFO, "file@path='" + pathString + "' still exists, and has not changed in size.");
-		    }
-		} catch (InvalidPathException e) {
-		    logger.log(Level.WARN, "invalid path='" + pathString + "' --> deleting from db", e);
-		    deletePathFromDB(pathString);
+	    boolean trueMatch = false;
+	    if (opposite) {
+		if (match.sawPath1 > 0 && match.sawPath2 == 0) {
+		    trueMatch = true;
+		}
+	    } else {
+		if ((path1 == null || match.sawPath1 > 0) && (path2 == null || match.sawPath2 > 0)
+		&& (path1 == null || path2 == null || !path1.equals(path2) || match.sawPath1 > 1)) {
+		    trueMatch = true;
 		}
 	    }
 
-	} catch (SQLException e) {
-	    logger.error("failed to read paths from database", e);
-	}
-	// "sqlStatement_select_all_files_like";
-    }
-
-    private void deletePathFromDB(String pathString) {
-	logger.log(Level.INFO, "deleting path '" + pathString + "' from database.");
-	try {
-	    getDeleteSingleFile().setString(1, pathString);
-	    getDeleteSingleFile().execute();
-	} catch (SQLException e) {
-	    logger.error("failed to delete path '" + pathString + "' from db", e);
-	}
-    }
-
-    @Override
-    protected void finalize() throws Throwable {
-
-	if (connection != null)
-	    connection.close();
-
-	logger.log(Level.INFO, "Disconnected from database");
-
-	super.finalize();
-    }
-
-    private Properties findConfigFile() {
-	Properties configFile = new Properties();
-
-	InputStream inputStream = null;
-
-	try {
-	    inputStream = new FileInputStream("./DirectoryScanner.properties");
-	    if (inputStream != null)
-		logger.log(Level.INFO, "successfully loaded \"DirectoryScanner.properties\" file with new FileInputStream(\"./DirectoryScanner.properties\")");
-	} catch (FileNotFoundException e) {
-	    e.printStackTrace();
-	}
-	if (inputStream == null) {
-	    try {
-		inputStream = new FileInputStream("/DirectoryScanner.properties");
-		if (inputStream != null)
-		    logger.log(Level.INFO,
-		    "successfully loaded \"DirectoryScanner.properties\" file with new FileInputStream(\"/DirectoryScanner.properties\")");
-	    } catch (FileNotFoundException e) {
-		e.printStackTrace();
+	    if (trueMatch) {
+		logger.info("found matching sha1=" + sha1 + "; size=" + match.size + "; existing @ paths:");
+		for (String path : match.paths) {
+		    logger.info(path);
+		}
+		matches.add(match);
 	    }
-	}
-	if (inputStream == null) {
-	    try {
-		inputStream = new FileInputStream("DirectoryScanner.properties");
-		if (inputStream != null)
-		    logger
-		    .log(Level.INFO, "successfully loaded \"DirectoryScanner.properties\" file with new FileInputStream(\"DirectoryScanner.properties\")");
-	    } catch (FileNotFoundException e) {
-		e.printStackTrace();
-	    }
-	}
-	if (inputStream == null) {
-	    try {
-		inputStream = this.getClass().getClassLoader().getResourceAsStream("./DirectoryScanner.properties");
-		if (inputStream != null)
-		    logger
-		    .log(Level.INFO,
-		    "successfully loaded \"DirectoryScanner.properties\" file with this.getClass().getClassLoader().getResourceAsStream(\"./DirectoryScanner.properties\");");
-	    } catch (Throwable t) {
-		t.printStackTrace();
-	    }
-	}
-	if (inputStream == null) {
-	    try {
-		inputStream = this.getClass().getClassLoader().getResourceAsStream("/DirectoryScanner.properties");
-		if (inputStream != null)
-		    logger
-		    .log(Level.INFO,
-		    "successfully loaded \"DirectoryScanner.properties\" file with this.getClass().getClassLoader().getResourceAsStream(\"/DirectoryScanner.properties\");");
-	    } catch (Throwable t) {
-		t.printStackTrace();
-	    }
-	}
-	if (inputStream == null) {
-	    try {
-		inputStream = this.getClass().getClassLoader().getResourceAsStream("DirectoryScanner.properties");
-		if (inputStream != null)
-		    logger
-		    .log(Level.INFO,
-		    "successfully loaded \"DirectoryScanner.properties\" file with this.getClass().getClassLoader().getResourceAsStream(\"DirectoryScanner.properties\");");
-	    } catch (Throwable t) {
-		t.printStackTrace();
-	    }
-	}
 
-	try {
-	    configFile.load(inputStream);
-	    inputStream.close();
-	} catch (IOException e1) {
-	    e1.printStackTrace();
-	} catch (Throwable t) {
-	    t.printStackTrace();
 	}
-
-	finally {
-	    try {
-		if (inputStream != null)
-		    inputStream.close();
-	    } catch (IOException e) {
-		e.printStackTrace();
-	    }
-	}
-
-	return configFile;
+	logger.info("finished Worker.findDuplicates");
+	return matches;
     }
 }

@@ -125,4 +125,48 @@ CREATE TABLE `files`.`files` (
 
 
 
+RENAME TABLE files TO files_old;
+
+SELECT * FROM directories;
+
+DELETE FROM directories;
+
+
+SELECT * FROM files;
+
+DROP TABLE files;
+
+DROP DATABASE files;
+
+
+SELECT * FROM files f
+INNER JOIN directories d
+ON f.dir_id = d.id
+
+SELECT count(*) FROM files f
+WHERE f.scanDir_id IS NULL
+
+SELECT count(*) FROM directories d
+WHERE d.scanDir_id IS NOT NULL
+
+SELECT count(DISTINCT sha1)
+FROM files f
+WHERE size = 0
+
+SELECT f.sha1, count(f.sha1) as count
+FROM files f 
+WHERE f.size = 0
+GROUP BY f.sha1
+ORDER BY count desc;
+
+SELECT f.sha1, count(f.sha1) as count, f.filename
+FROM files f
+INNER JOIN files f2
+ON f2.sha1 = f.sha1
+WHERE f.size = 0
+GROUP BY f.sha1
+ORDER BY count desc;
+
+WHERE f.filename = 'mounts'
+AND d.path = '/proc/1882/task/1964'
 

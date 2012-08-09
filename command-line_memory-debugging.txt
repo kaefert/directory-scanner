@@ -1,0 +1,18 @@
+export JVM_ARGS="-Xms1024m -Xmx1024m -Xms256M -XX:PermSize=64M -XX:MaxPermSize=256m"
+
+java -Xms1056m -Xmx1056m  MyProgram
+
+java -Xms512m -Xmx2048m -Xmn256m -XX:PermSize=512m -XX:MaxPermSize=1024m -jar directory-scanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar
+
+
+java -Xms16m -Xmx64m -Xmn8m -XX:PermSize=32m -XX:MaxPermSize=128m -jar directory-scanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar
+
+java -Xms512m -Xmx2048m -Xmn256m -XX:PermSize=512m -XX:MaxPermSize=2048m -verbose:gc –XX:+PrintGCDetails –XX:+PrintGCTimeStamps –Xloggc:~/directory-scanner_gc.log -jar "/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49/Daten/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
+
+java -Xms512m -Xmx2048m -Xmn256m -XX:PermSize=512m -XX:MaxPermSize=2048m -verbose:gc –XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/home/kaefert/Documents/directory-scanner_gc.log -jar "/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49/Daten/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
+
+java -Xms512m -Xmx2048m -Xmn256m -XX:PermSize=512m -XX:MaxPermSize=2048m -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/home/kaefert/Documents/directory-scanner_gc.log -jar "/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49/Daten/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
+
+java -Xms512m -Xmx2048m -Xmn256m -XX:PermSize=512m -XX:MaxPermSize=2048m -verbose:gc –XX:+PrintGCDetails -XX:+PrintGCTimeStamps -jar "/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49/Daten/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
+
+/usr/lib/jvm/java-7-openjdk-amd64/jre/bin/java -Xms512m -Xmx2048m -Xmn256m -XX:PermSize=512m -XX:MaxPermSize=2048m -verbose:gc -XX:+HeapDumpOnOutOfMemoryError -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/home/kaefert/Documents/directory-scanner_gc.log -jar "/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49/Daten/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar"

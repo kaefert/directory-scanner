@@ -116,6 +116,7 @@ public class DatabaseHandler {
 	    if (global != null) {
 		PreparedStatement createTable = global.prepareStatement(configFile.getProperty("sql_createTableDirectories"));
 		createTable.execute();
+		createTable.close();
 	    }
 	} catch (SQLException e) {
 	    logger.error("Could not create table directories", e);
@@ -133,6 +134,7 @@ public class DatabaseHandler {
 	    if (global != null) {
 		PreparedStatement createTable = global.prepareStatement(configFile.getProperty("sql_createTableFiles"));
 		createTable.execute();
+		createTable.close();
 	    }
 	} catch (SQLException e) {
 	    logger.error("Could not create table Files", e);
@@ -159,6 +161,8 @@ public class DatabaseHandler {
 		    if (result.getDate("finished") != null)
 			directoriesDone.put(result.getInt("id"), result.getDate("finished"));
 		}
+
+		stmt.close();
 
 	    } catch (SQLException e) {
 		directories = null;
@@ -226,6 +230,7 @@ public class DatabaseHandler {
 		stmt.setTimestamp(2, new java.sql.Timestamp(new java.util.Date().getTime()));
 		stmt.setInt(3, dirId);
 		stmt.execute();
+		stmt.close();
 	    } else {
 		PreparedStatement stmt = getConnection().prepareStatement("INSERT INTO directories (path, scanDir_id, scandate, finished) VALUES (?, ?, ?, ?)");
 		stmt.setString(1, path);
@@ -252,8 +257,10 @@ public class DatabaseHandler {
 		    if (finished)
 			getDirectoriesDone().put(result.getInt(1), new Date());
 
-		    return result.getInt(1);
+		    dirId = result.getInt(1);
+		    break;
 		}
+		stmt.close();
 	    }
 	} catch (SQLException e) {
 	    if (!createDirectoriesTableFailed) {
@@ -290,6 +297,7 @@ public class DatabaseHandler {
 		nonUniqueSha1s = new HashSet<>();
 
 		ResultSet result = stmt.executeQuery();
+		
 		while (result.next()) {
 		    fileIds.put(result.getString("path") + "/" + result.getString("filename"), result.getInt("id"));
 		    filePaths.put(result.getInt("id"), result.getString("path") + "/" + result.getString("filename"));
@@ -307,6 +315,8 @@ public class DatabaseHandler {
 			    nonUniqueSha1s.add(result.getString("sha1"));
 		    }
 		}
+
+		stmt.close();
 		logger.log(Level.INFO, "Finished building scannedFiles map");
 
 	    } catch (SQLException e) {
@@ -377,6 +387,7 @@ public class DatabaseHandler {
 
 		stmt.setInt(5, fileId);
 		stmt.execute();
+		stmt.close();
 	    } else {
 		PreparedStatement stmt = getConnection().prepareStatement(
 		"INSERT INTO files (dir_id, scanDir_id, filename, sha1, scandate, size) VALUES (?, ?, ?, ?, ?, ?)");
@@ -393,6 +404,7 @@ public class DatabaseHandler {
 		stmt.setTimestamp(5, timestamp);
 		stmt.setLong(6, size);
 		stmt.execute();
+		stmt.close();
 
 		stmt = getConnection().prepareStatement("select LAST_INSERT_ID()");
 		ResultSet result = stmt.executeQuery();
@@ -402,8 +414,10 @@ public class DatabaseHandler {
 		    getFilePaths().put(result.getInt(1), fullPath);
 		    getFileSizes().put(result.getInt(1), size);
 		    getFileScandates().put(result.getInt(1), timestamp);
-		    return result.getInt(1);
+		    fileId = result.getInt(1);
+		    break;
 		}
+		stmt.close();
 	    }
 	} catch (SQLException e) {
 
@@ -425,6 +439,7 @@ public class DatabaseHandler {
 	    PreparedStatement stmt = getConnection().prepareStatement("DELETE FROM directories WHERE path LIKE ?");
 	    stmt.setString(1, s + "%");
 	    stmt.execute();
+	    stmt.close();
 	} catch (SQLException e) {
 	    logger.error("forgetDirectoryTree failed - SQLException", e);
 	}

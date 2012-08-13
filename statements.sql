@@ -132,7 +132,8 @@ SELECT * FROM directories;
 DELETE FROM directories;
 
 
-SELECT * FROM files;
+SELECT * FROM files
+WHERE filename = 'jdk-7u5-linux-x64.tar.gz'
 
 DROP TABLE files;
 

@@ -1,0 +1,899 @@
+### Eclipse Workspace Patch 1.0
+#P directory-scanner
+Index: src/main/java/com/googlecode/directory_scanner/contracts/ControlCenter.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/contracts/ControlCenter.java	(revision 0)
++++ src/main/java/com/googlecode/directory_scanner/contracts/ControlCenter.java	(revision 0)
+@@ -0,0 +1,7 @@
++package com.googlecode.directory_scanner.contracts;
++
++public interface ControlCenter {
++
++    public void scanPath(final String pathString);
++    
++}
+Index: src/main/java/com/googlecode/directory_scanner/domain/PathVisit.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/domain/PathVisit.java	(revision 0)
++++ src/main/java/com/googlecode/directory_scanner/domain/PathVisit.java	(revision 0)
+@@ -0,0 +1,39 @@
++package com.googlecode.directory_scanner.domain;
++
++import java.nio.file.Path;
++
++public class PathVisit {
++
++    private Path path;
++    private long size;
++    private int scanRoot;
++
++    public enum Type {
++	FILE, DIRECTORY, FAIL
++    }
++    private Type type;
++    
++    public PathVisit(int scanRoot, Path path, long size, Type type) {
++	this.scanRoot = scanRoot;
++	this.path = path;
++	this.size = size;
++	this.type = type;
++    }
++    
++    public int getScanRoot() {
++        return scanRoot;
++    }
++
++    public Path getPath() {
++        return path;
++    }
++
++    public long getSize() {
++        return size;
++    }
++    
++    public Type getType() {
++	return type;
++    }
++
++}
+Index: src/main/java/com/googlecode/directory_scanner/Worker.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/Worker.java	(revision 19)
++++ src/main/java/com/googlecode/directory_scanner/Worker.java	(working copy)
+@@ -11,10 +11,15 @@
+ import java.util.Map;
+ import java.util.Properties;
+ import java.util.Set;
++import java.util.concurrent.ArrayBlockingQueue;
+ 
+ import org.apache.log4j.Level;
+ import org.apache.log4j.Logger;
+ 
++import com.googlecode.directory_scanner.domain.PathVisit;
++import com.googlecode.directory_scanner.workers.DirectorySkipDeciderImpl;
++import com.googlecode.directory_scanner.workers.PathWalker;
++
+ public class Worker {
+ 
+     private Logger logger;
+@@ -39,10 +44,30 @@
+ 	// if(checkDoneDirectories.equals(
+     }
+ 
+-    public void scanPath(String pathString) {
++    public void scanPath(final String pathString) {
+ 	logger.info("Worker.scanPath(\"" + pathString + "\") started");
+-	databaseHandler.insertDirectory(pathString, null, false);
+-	new PathWalker(logger, this, pathString);
++	
++	
++	final ArrayBlockingQueue<PathVisit> queue = new ArrayBlockingQueue<>(1000, false);
++//	PathVisitProcessor
++	
++	new Thread(new Runnable() {
++	    @Override
++	    public void run() {
++		Integer scanDirId = getDirectoryId(pathString, true);
++		new PathWalker(logger, pathString, scanDirId, queue, new DirectorySkipDeciderImpl(pathString, skipDirectoriesDoneAfter, 1000, databaseHandler));
++	    }
++	}).start();
++		
++	
++//	new Thread(new Runnable() {
++//	    @Override
++//	    public void run() {
++//		new PathVisitProcessor(queue, )
++//	    }
++//	}).start();
++		
++	
+ 
+ 	if (failedVisits != null && failedVisits.size() > 0) {
+ 	    logger.info("PathWalker finished, printing failedVisits errors now:");
+@@ -56,12 +81,16 @@
+ 	logger.info("Worker.scanPath(\"" + pathString + "\") finished");
+     }
+ 
+-    public boolean preScanDirectory(Path dir, BasicFileAttributes attrs, String scanPath) {
++    public Integer getDirectoryId(String path, boolean insertIfNotExists) {
++	return databaseHandler.getDirectoryId(path, insertIfNotExists);
++    }
++    
++    public boolean preScanDirectory(Path dir, BasicFileAttributes attrs, Integer scanPathId) {
+ 
+ 	if (skipDirectoriesScannedAgo.equals(-1)) {
+ 	    return false;
+ 	} else {
+-	    Date finished = databaseHandler.getDirectoryDoneTime(dir.toString(), databaseHandler.getDirectory(scanPath));
++	    Date finished = databaseHandler.getDirectoryDoneTime(dir.toString(), scanPathId, false);
+ 
+ 	    if (finished != null && (skipDirectoriesScannedAgo < -1 || finished.after(skipDirectoriesDoneAfter))) {
+ 		logger.log(Level.INFO, "skipping done directory: " + dir.toString());
+@@ -73,17 +102,17 @@
+ 	}
+     }
+ 
+-    public void postScanDirectory(Path dir, IOException exc, String scanPath) {
+-	databaseHandler.insertDirectory(dir.toString(), databaseHandler.getDirectory(scanPath), true);
++    public void postScanDirectory(Path dir, IOException exc, Integer scanPath) {
++	databaseHandler.insertDirectory(dir.toString(), getDirectoryId(dir.toString(), false), scanPath, true);
+     }
+ 
+-    public void scanFile(Path file, BasicFileAttributes attr, String scanPath) {
++    public void scanFile(Path file, BasicFileAttributes attr, Integer scanPathId) {
+ 
+ 	String fullPath = file.toString();
+ 	String fileName = file.getFileName().toString();
+ 	String directory = file.getParent().toString();
+ 
+-	Integer dirId = databaseHandler.getDirectory(directory);
++	Integer dirId = getDirectoryId(directory, true);
+ 
+ 	boolean scanned = false, sized = false;
+ 
+@@ -100,7 +129,7 @@
+ 	    try {
+ 		String sha1 = ChecksumSHA1.getSHA1Checksum(file);
+ 		logger.log(Level.INFO, "sha1 = " + sha1);
+-		databaseHandler.insertFile(fullPath, fileName, dirId, databaseHandler.getDirectory(scanPath), attr.size(), sha1);
++		databaseHandler.insertFile(fullPath, fileName, dirId, scanPathId, attr.size(), sha1);
+ 
+ 	    } catch (NoSuchAlgorithmException | IOException e) {
+ 		logger.error("failed to calculate sha1 checksum", e);
+@@ -138,7 +167,9 @@
+ 
+ 	SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+ 
+-	for (Map.Entry<String, Integer> entry : databaseHandler.getFileIds().entrySet()) {
++//	ArrayBlockingQueue<E>
++	
++	for (Map.Entry<String, Integer> entry : databaseHandler.getFilesInPath(text).entrySet()) {
+ 	    if (entry.getKey().startsWith(text)) {
+ 		Integer id = entry.getValue();
+ 		Long filesize = databaseHandler.getFileSizes().get(id);
+Index: src/main/java/log4j.xml
+===================================================================
+--- src/main/java/log4j.xml	(revision 18)
++++ src/main/java/log4j.xml	(working copy)
+@@ -5,7 +5,7 @@
+   <appender name="console" class="org.apache.log4j.ConsoleAppender"> 
+     <param name="Target" value="System.out"/> 
+     <layout class="org.apache.log4j.PatternLayout"> 
+-      <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss,SSS} [%p] %m%n"/> 
++      <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%p] %m%n"/> 
+     </layout> 
+   </appender> 
+ 
+Index: src/main/java/com/googlecode/directory_scanner/workers/DirectorySkipDeciderImpl.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/workers/DirectorySkipDeciderImpl.java	(revision 0)
++++ src/main/java/com/googlecode/directory_scanner/workers/DirectorySkipDeciderImpl.java	(revision 0)
+@@ -0,0 +1,56 @@
++package com.googlecode.directory_scanner.workers;
++
++import java.nio.file.Path;
++import java.nio.file.attribute.BasicFileAttributes;
++import java.util.Date;
++import java.util.HashSet;
++
++import com.googlecode.directory_scanner.DatabaseHandler;
++import com.googlecode.directory_scanner.contracts.DirectorySkipDecider;
++
++public class DirectorySkipDeciderImpl implements DirectorySkipDecider {
++
++    private HashSet<String> cache = null;
++    private DatabaseHandler db = null;
++    private Date after = null;
++    private Thread modeDecider;
++
++    public DirectorySkipDeciderImpl(final String below, final Date after, final int limit, final DatabaseHandler db) {
++
++	modeDecider = new Thread(new Runnable() {
++	    @Override
++	    public void run() {
++		DirectorySkipDeciderImpl.this.modeDecider = null;
++		cache = db.getDirectoriesDoneBelowAfterIfLessThen(below, after, limit);
++		if(cache == null) {
++		    DirectorySkipDeciderImpl.this.db = db;
++		    DirectorySkipDeciderImpl.this.after = after;
++		}   
++	    }
++	});
++	modeDecider.start();
++    }
++
++    @Override
++    public boolean decideDirectorySkip(Path path, BasicFileAttributes attrs) {
++	if (modeDecider != null) {
++	    try {
++		modeDecider.join();
++	    } catch (InterruptedException e) {
++		e.printStackTrace();
++	    }
++	}
++	
++	if(cache != null) {
++	    for(String s : cache) {
++		if(s.equals(path.toString())) 
++		    return true;
++	    }
++	    return false;
++	}
++	else {
++	    return db.getDirectoryDoneAfter(path.toString(), after);
++	}
++    }
++
++}
+Index: statements.sql
+===================================================================
+--- statements.sql	(revision 18)
++++ statements.sql	(working copy)
+@@ -132,7 +132,8 @@
+ DELETE FROM directories;
+ 
+ 
+-SELECT * FROM files;
++SELECT * FROM files
++WHERE filename = 'jdk-7u5-linux-x64.tar.gz'
+ 
+ DROP TABLE files;
+ 
+Index: src/main/java/com/googlecode/directory_scanner/domain/ReportMatch.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/domain/ReportMatch.java	(revision 0)
++++ src/main/java/com/googlecode/directory_scanner/domain/ReportMatch.java	(revision 0)
+@@ -0,0 +1,63 @@
++package com.googlecode.directory_scanner.domain;
++
++import java.util.Comparator;
++import java.util.HashSet;
++
++public class ReportMatch {
++
++    public String sha1;
++    public long size;
++    public HashSet<String> paths;
++    public HashSet<Integer> fileIds;
++    public int sawPath1, sawPath2;
++
++    public ReportMatch(String sha1) {
++	this.sha1 = sha1;
++//	TODO: rethink reporting
++//	this.fileIds = databaseHandler.getFileSha1s().get(sha1);
++	this.paths = new HashSet<>(2);
++	this.size = -1;
++	this.sawPath1 = 0;
++	this.sawPath2 = 0;
++    }
++
++    
++    public static Comparator<ReportMatch> compareMatchBySize = new Comparator<ReportMatch>() {
++	@Override
++	public int compare(ReportMatch o1, ReportMatch o2) {
++	    if (o1.size < o2.size)
++		return 1;
++	    if (o1.size > o2.size)
++		return -1;
++	    return 0;
++	}
++    };
++
++    public static Comparator<ReportMatch> compareMatchByCount = new Comparator<ReportMatch>() {
++	@Override
++	public int compare(ReportMatch o1, ReportMatch o2) {
++	    if (o1.fileIds.size() < o2.fileIds.size())
++		return 1;
++	    if (o1.fileIds.size() > o2.fileIds.size())
++		return -1;
++	    return 0;
++	}
++    };
++
++    public static Comparator<ReportMatch> compareMatchBySizeTimesCount = new Comparator<ReportMatch>() {
++	@Override
++	public int compare(ReportMatch o1, ReportMatch o2) {
++	    long val1 = o1.fileIds.size() * o1.size;
++	    long val2 = o2.fileIds.size() * o2.size;
++	    if (val1 < val2)
++		return 1;
++	    if (val1 > val2)
++		return -1;
++	    if (o1.fileIds.size() < o2.fileIds.size())
++		return 1;
++	    if (o1.fileIds.size() > o2.fileIds.size())
++		return -1;
++	    return 0;
++	}
++    };
++}
+Index: src/main/java/com/googlecode/directory_scanner/contracts/DirectorySkipDecider.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/contracts/DirectorySkipDecider.java	(revision 0)
++++ src/main/java/com/googlecode/directory_scanner/contracts/DirectorySkipDecider.java	(revision 0)
+@@ -0,0 +1,8 @@
++package com.googlecode.directory_scanner.contracts;
++
++import java.nio.file.Path;
++import java.nio.file.attribute.BasicFileAttributes;
++
++public interface DirectorySkipDecider {
++    public boolean decideDirectorySkip(Path path, BasicFileAttributes attrs);
++}
+Index: src/main/java/com/googlecode/directory_scanner/workers/PathVisitProcessor.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/workers/PathVisitProcessor.java	(revision 0)
++++ src/main/java/com/googlecode/directory_scanner/workers/PathVisitProcessor.java	(revision 0)
+@@ -0,0 +1,40 @@
++package com.googlecode.directory_scanner.workers;
++
++import java.util.concurrent.BlockingQueue;
++
++import com.googlecode.directory_scanner.domain.PathVisit;
++
++public class PathVisitProcessor {
++
++    private BlockingQueue<PathVisit> queue;
++    private boolean stopIfQueueEmpty = false;
++    private Thread processor = null;
++
++    public PathVisitProcessor(BlockingQueue<PathVisit> queue) {
++	this.queue = queue;
++	
++	processor = new Thread(new Runnable() {
++	    @Override
++	    public void run() {
++		process();   
++	    }
++	});
++	processor.start();
++    }
++
++    public void stopIfEmpty() {
++	stopIfQueueEmpty = true;
++	processor.interrupt();
++    }
++
++    private void process() {
++	while (!stopIfQueueEmpty || !queue.isEmpty()) {
++	    try {
++		PathVisit pathVisit = queue.take();
++		
++	    } catch (InterruptedException e) {
++		e.printStackTrace();
++	    }
++	}
++    }
++}
+Index: src/main/java/com/googlecode/directory_scanner/DatabaseHandler.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/DatabaseHandler.java	(revision 22)
++++ src/main/java/com/googlecode/directory_scanner/DatabaseHandler.java	(working copy)
+@@ -24,18 +24,20 @@
+  */
+ public class DatabaseHandler {
+ 
+-    private Properties configFile;
++    private Properties appConfig;
+     private Logger logger;
++    private int caching;
+ 
+     public DatabaseHandler(Properties configFile, Logger logger) {
+-	this.configFile = configFile;
++	this.appConfig = configFile;
++	caching = Integer.parseInt(appConfig.getProperty("cache"));
+ 	this.logger = logger;
+     }
+ 
+     private Map<String, Connection> connections = null;
+ 
+     private Connection getConnection() {
+-	return getConnection(configFile.getProperty("databaseName"));
++	return getConnection(appConfig.getProperty("databaseName"));
+     }
+ 
+     private Connection getConnection(String databaseName) {
+@@ -45,9 +47,9 @@
+ 	if (connections.get(databaseName) == null) {
+ 
+ 	    try {
+-		Class.forName(configFile.getProperty("databaseDriver")).newInstance();
+-		Connection connection = DriverManager.getConnection(configFile.getProperty("databaseUrl") + databaseName,
+-		configFile.getProperty("databaseUser"), configFile.getProperty("databasePassword"));
++		Class.forName(appConfig.getProperty("databaseDriver")).newInstance();
++		Connection connection = DriverManager.getConnection(appConfig.getProperty("databaseUrl") + databaseName, appConfig.getProperty("databaseUser"),
++		appConfig.getProperty("databasePassword"));
+ 		connections.put(databaseName, connection);
+ 		logger.log(Level.INFO, "Connected to the database \"" + databaseName + "\"");
+ 
+@@ -114,7 +116,7 @@
+ 	try {
+ 	    Connection global = getConnection();
+ 	    if (global != null) {
+-		PreparedStatement createTable = global.prepareStatement(configFile.getProperty("sql_createTableDirectories"));
++		PreparedStatement createTable = global.prepareStatement(appConfig.getProperty("sql_createTableDirectories"));
+ 		createTable.execute();
+ 		createTable.close();
+ 	    }
+@@ -132,7 +134,7 @@
+ 	try {
+ 	    Connection global = getConnection();
+ 	    if (global != null) {
+-		PreparedStatement createTable = global.prepareStatement(configFile.getProperty("sql_createTableFiles"));
++		PreparedStatement createTable = global.prepareStatement(appConfig.getProperty("sql_createTableFiles"));
+ 		createTable.execute();
+ 		createTable.close();
+ 	    }
+@@ -147,7 +149,7 @@
+ 
+     // private Map<String, Integer> directories;
+ 
+-    public Map<String, Integer> getDirectories() {
++    private Map<String, Integer> getDirectories() {
+ 	if (directories == null) {
+ 	    try {
+ 		PreparedStatement stmt = getConnection().prepareStatement("SELECT path, id, finished FROM directories");
+@@ -179,28 +181,87 @@
+ 	return directories;
+     }
+ 
+-    public HashMap<Integer, Date> getDirectoriesDone() {
++    private HashMap<Integer, Date> getDirectoriesDone() {
+ 	getDirectories();
+ 	return directoriesDone;
+     }
+ 
+-    public Date getDirectoryDoneTime(String path, Integer scanDir) {
+-	Integer id = getDirectories().get(path);
+-	if (id != null) {
+-	    return getDirectoriesDone().get(id);
+-	    // return getDoneDirectories().contains(id);
+-	} else {
+-	    insertDirectory(path, scanDir, false);
+-	    return null;
++    private PreparedStatement selectDirectoryDoneTime = null;
++
++    public Date getDirectoryDoneTime(String path, Integer scanDir, boolean insertIfNotExists) {
++	if (caching == 0) {
++
++	    try {
++		if (selectDirectoryDoneTime == null)
++		    selectDirectoryDoneTime = getConnection().prepareStatement("SELECT finished FROM directories WHERE path = ?");
++		selectDirectoryDoneTime.setString(1, path);
++		ResultSet result = selectDirectoryDoneTime.executeQuery();
++
++		while (result.next()) {
++		    return result.getTimestamp(1);
++		}
++		if(insertIfNotExists)
++		    insertDirectory(path, null, scanDir, false);
++		return null;
++
++	    } catch (SQLException e) {
++		logger.error("could not select directory", e);
++		e.printStackTrace();
++		return null;
++	    }
++
++	} else { // if(cache.equals("1")) {
++	    Integer id = getDirectories().get(path);
++	    if (id != null) {
++		return getDirectoriesDone().get(id);
++		// return getDoneDirectories().contains(id);
++	    } else {
++		if(insertIfNotExists)
++		    insertDirectory(path, null, scanDir, false);
++		return null;
++	    }
+ 	}
+     }
+ 
+-    public Integer getDirectory(String path) {
+-	Integer id = getDirectories().get(path);
+-	if (id != null) {
+-	    return id;
++    private PreparedStatement selectDirectoryId = null;
++
++    /**
++     * 
++     * @return if @param createIfNotExists is false, you might get null if directory is not yet in db.
++     */
++    public Integer getDirectoryId(String path, boolean createIfNotExists) {
++	if (caching == 0) {
++
++	    try {
++		if (selectDirectoryId == null)
++		    selectDirectoryId = getConnection().prepareStatement("SELECT id FROM directories WHERE path = ?");
++		selectDirectoryId.setString(1, path);
++		ResultSet result = selectDirectoryId.executeQuery();
++
++		while (result.next()) {
++		    return result.getInt(1);
++		}
++		if (createIfNotExists)
++		    return insertDirectory(path, null, null, false);
++		else
++		    return null;
++
++	    } catch (SQLException e) {
++		logger.error("could not select directory", e);
++		e.printStackTrace();
++		return null;
++	    }
++
+ 	} else {
+-	    return insertDirectory(path, null, false);
++	    Integer id = getDirectories().get(path);
++	    if (id != null) {
++		return id;
++	    } else {
++		if (createIfNotExists)
++		    return insertDirectory(path, null, null, false);
++		else
++		    return null;
++	    }
+ 	}
+     }
+ 
+@@ -210,9 +271,7 @@
+ 	getDirectoriesDone().clear();
+     }
+ 
+-    public Integer insertDirectory(String path, Integer scanDir, boolean finished) {
+-	getDirectories();
+-	Integer dirId = (Integer) directories.get(path);
++    public Integer insertDirectory(String path, Integer dirId, Integer scanDir, boolean finished) {
+ 
+ 	try {
+ 	    if (dirId != null) {
+@@ -265,7 +324,7 @@
+ 	} catch (SQLException e) {
+ 	    if (!createDirectoriesTableFailed) {
+ 		createDirectoriesTable();
+-		insertDirectory(path, scanDir, finished);
++		insertDirectory(path, dirId, scanDir, finished);
+ 	    }
+ 	    e.printStackTrace();
+ 	}
+@@ -281,7 +340,7 @@
+     private Map<Integer, Date> fileScandates;
+     private Map<String, HashSet<Integer>> fileSha1s;
+     private HashSet<String> nonUniqueSha1s;
+-    
++
+     public Map<String, Integer> getFileIds() {
+ 	if (fileIds == null) {
+ 	    logger.log(Level.INFO, "Start building map of existing files");
+@@ -297,7 +356,7 @@
+ 		nonUniqueSha1s = new HashSet<>();
+ 
+ 		ResultSet result = stmt.executeQuery();
+-		
++
+ 		while (result.next()) {
+ 		    fileIds.put(result.getString("path") + "/" + result.getString("filename"), result.getInt("id"));
+ 		    filePaths.put(result.getInt("id"), result.getString("path") + "/" + result.getString("filename"));
+@@ -311,7 +370,7 @@
+ 			fileSha1s.put(result.getString("sha1"), sha1Ids);
+ 		    } else {
+ 			sha1Ids.add(result.getInt("id"));
+-			if(sha1Ids.size() > 1)
++			if (sha1Ids.size() > 1)
+ 			    nonUniqueSha1s.add(result.getString("sha1"));
+ 		    }
+ 		}
+@@ -338,7 +397,7 @@
+ 	}
+ 	return fileIds;
+     }
+-    
++
+     public Map<Integer, String> getFilePaths() {
+ 	getFileIds();
+ 	return filePaths;
+@@ -409,7 +468,7 @@
+ 		stmt = getConnection().prepareStatement("select LAST_INSERT_ID()");
+ 		ResultSet result = stmt.executeQuery();
+ 		while (result.next()) {
+-		    
++
+ 		    getFileIds().put(fullPath, result.getInt(1));
+ 		    getFilePaths().put(result.getInt(1), fullPath);
+ 		    getFileSizes().put(result.getInt(1), size);
+Index: src/main/java/com/googlecode/directory_scanner/PathWalker.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/PathWalker.java	(revision 19)
++++ src/main/java/com/googlecode/directory_scanner/PathWalker.java	(working copy)
+@@ -1,102 +0,0 @@
+-package com.googlecode.directory_scanner;
+-
+-import java.io.IOException;
+-import java.nio.file.FileSystems;
+-import java.nio.file.FileVisitResult;
+-import java.nio.file.Files;
+-import java.nio.file.InvalidPathException;
+-import java.nio.file.Path;
+-import java.nio.file.SimpleFileVisitor;
+-import java.nio.file.attribute.BasicFileAttributes;
+-
+-import org.apache.log4j.Level;
+-import org.apache.log4j.Logger;
+-
+-public class PathWalker extends SimpleFileVisitor<Path> {
+-
+-    private Logger logger;
+-    private Worker worker;
+-    private String scanPath;
+-
+-    public PathWalker(Logger logger, Worker worker, String scanPath) {
+-	this.logger = logger;
+-	this.worker = worker;
+-	this.scanPath = scanPath;
+-	
+-	try {
+-	    Path path = FileSystems.getDefault().getPath(scanPath);
+-	    logger.info("starting scan with scanroot=\"" + scanPath + "\"");
+-	    Files.walkFileTree(path, this);
+-	    logger.info("finished scan with scanroot=\"" + scanPath + "\"");
+-
+-	} catch (InvalidPathException e) {
+-	    logger.log(Level.ERROR, "invalid path='" + scanPath + "'", e);
+-	} catch (IOException e) {
+-	    logger.log(Level.ERROR, "could not read path='" + scanPath + "'", e);
+-	}
+-    }
+-
+-    // Print information about
+-    // each type of file.
+-    @Override
+-    public FileVisitResult visitFile(Path file, BasicFileAttributes attr) {
+-	if (attr.isSymbolicLink()) {
+-	    logger.info("Found Symbolic link: " + file);
+-	}
+-
+-	if (attr.isRegularFile()) {
+-	    logger.info("Found Regular file: " + file);
+-	}
+-
+-	if (attr.isOther()) {
+-	    logger.info("Found Other file: " + file);
+-	}
+-
+-	if (attr.isDirectory()) {
+-	    logger.info("path given to visitFile method is a directory! --> " + file);
+-	} else {
+-	    logger.info("size = " + attr.size() + " bytes)");
+-	    worker.scanFile(file, attr, scanPath);
+-	}
+-
+-	// try {
+-	// System.out.println("sha1 = " + ChecksumSHA1.getSHA1Checksum(file));
+-	// } catch (NoSuchAlgorithmException e) {
+-	// e.printStackTrace();
+-	// } catch (IOException e) {
+-	// e.printStackTrace();
+-	// }
+-
+-	return FileVisitResult.CONTINUE;
+-    }
+-
+-    @Override
+-    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+-	if (worker.preScanDirectory(dir, attrs, scanPath)) {
+-	    return FileVisitResult.SKIP_SUBTREE;
+-	} else {
+-	    return FileVisitResult.CONTINUE;
+-	}
+-
+-    }
+-
+-    // Print each directory visited.
+-    @Override
+-    public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+-	// System.out.format("Directory: %s%n", dir);
+-
+-	worker.postScanDirectory(dir, exc, scanPath);
+-	return FileVisitResult.CONTINUE;
+-    }
+-
+-    // If there is some error accessing
+-    // the file, let the user know.
+-    // If you don't override this method
+-    // and an error occurs, an IOException
+-    // is thrown.
+-    @Override
+-    public FileVisitResult visitFileFailed(Path file, IOException exc) {
+-	worker.visitFileFailed(file, exc);
+-	return FileVisitResult.CONTINUE;
+-    }
+-}
+\ No newline at end of file
+Index: DirectoryScanner.properties
+===================================================================
+--- DirectoryScanner.properties	(revision 19)
++++ DirectoryScanner.properties	(working copy)
+@@ -14,6 +14,10 @@
+ #log messages that have at least this level
+ status-log-level=ERROR
+ 
++# cache=0 --> do not cache data, query every info from the database --> slow 
++# cache=1 --> cache all data from the database in the java class DatabaseHandler --> very memory intensive for lots of files
++cache=0
++ 
+ 
+ ###############################
+Index: src/main/java/com/googlecode/directory_scanner/workers/PathWalker.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/workers/PathWalker.java	(revision 0)
++++ src/main/java/com/googlecode/directory_scanner/workers/PathWalker.java	(working copy)
+@@ -1,4 +1,4 @@
+-package com.googlecode.directory_scanner;
++package com.googlecode.directory_scanner.workers;
+ 
+ import java.io.IOException;
+ import java.nio.file.FileSystems;
+@@ -8,23 +8,29 @@
+ import java.nio.file.Path;
+ import java.nio.file.SimpleFileVisitor;
+ import java.nio.file.attribute.BasicFileAttributes;
++import java.util.concurrent.BlockingQueue;
+ 
+ import org.apache.log4j.Level;
+ import org.apache.log4j.Logger;
+ 
++import com.googlecode.directory_scanner.contracts.DirectorySkipDecider;
++import com.googlecode.directory_scanner.domain.PathVisit;
++
+ public class PathWalker extends SimpleFileVisitor<Path> {
+ 
+     private Logger logger;
+-    private Worker worker;
+-    private String scanPath;
++    private Integer scanPathId;
++    private BlockingQueue<PathVisit> queue;
++    private DirectorySkipDecider skipDecider;
+ 
+-    public PathWalker(Logger logger, Worker worker, String scanPath) {
++    public PathWalker(Logger logger, String scanPath, Integer scanPathId, BlockingQueue<PathVisit> queue, DirectorySkipDecider skipDecider) {
+ 	this.logger = logger;
+-	this.worker = worker;
+-	this.scanPath = scanPath;
+-	
++	this.queue = queue;
++	this.skipDecider = skipDecider;
++
+ 	try {
+ 	    Path path = FileSystems.getDefault().getPath(scanPath);
++	    this.scanPathId = scanPathId;
+ 	    logger.info("starting scan with scanroot=\"" + scanPath + "\"");
+ 	    Files.walkFileTree(path, this);
+ 	    logger.info("finished scan with scanroot=\"" + scanPath + "\"");
+@@ -56,7 +62,12 @@
+ 	    logger.info("path given to visitFile method is a directory! --> " + file);
+ 	} else {
+ 	    logger.info("size = " + attr.size() + " bytes)");
+-	    worker.scanFile(file, attr, scanPath);
++	    try {
++		queue.put(new PathVisit(scanPathId, file, attr.size(), PathVisit.Type.FILE));
++	    } catch (InterruptedException e) {
++		logger.error("interrupted while trying to put FileVisit into queue", e);
++	    }
++	    // worker.scanFile(file, attr, scanPathId);
+ 	}
+ 
+ 	// try {
+@@ -72,12 +83,11 @@
+ 
+     @Override
+     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+-	if (worker.preScanDirectory(dir, attrs, scanPath)) {
++	if (skipDecider.decideDirectorySkip(dir, attrs)) {
+ 	    return FileVisitResult.SKIP_SUBTREE;
+ 	} else {
+ 	    return FileVisitResult.CONTINUE;
+ 	}
+-
+     }
+ 
+     // Print each directory visited.
+@@ -85,7 +95,13 @@
+     public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+ 	// System.out.format("Directory: %s%n", dir);
+ 
+-	worker.postScanDirectory(dir, exc, scanPath);
++	try {
++	    queue.put(new PathVisit(scanPathId, dir, -1, PathVisit.Type.DIRECTORY));
++	} catch (InterruptedException e) {
++	    logger.error("interrupted while trying to put FileVisit into queue", e);
++	}
++
++//	worker.postScanDirectory(dir, exc, scanPathId);
+ 	return FileVisitResult.CONTINUE;
+     }
+ 
+@@ -96,7 +112,12 @@
+     // is thrown.
+     @Override
+     public FileVisitResult visitFileFailed(Path file, IOException exc) {
+-	worker.visitFileFailed(file, exc);
++	try {
++	    queue.put(new PathVisit(scanPathId, file, -1, PathVisit.Type.FAIL));
++	} catch (InterruptedException e) {
++	    logger.error("interrupted while trying to put FileVisit into queue", e);
++	}
++//	worker.visitFileFailed(file, exc);
+ 	return FileVisitResult.CONTINUE;
+     }
+ }
+\ No newline at end of file
+Index: src/main/java/com/googlecode/directory_scanner/ui/GUI.java
+===================================================================
+--- src/main/java/com/googlecode/directory_scanner/ui/GUI.java	(revision 19)
++++ src/main/java/com/googlecode/directory_scanner/ui/GUI.java	(working copy)
+@@ -30,6 +30,7 @@
+ import javax.swing.JLabel;
+ import javax.swing.JMenu;
+ import javax.swing.JMenuBar;
++import javax.swing.JMenuItem;
+ import javax.swing.JPanel;
+ import javax.swing.JRadioButtonMenuItem;
+ import javax.swing.JScrollBar;
+@@ -37,6 +38,7 @@
+ import javax.swing.JTabbedPane;
+ import javax.swing.JTextArea;
+ import javax.swing.JTextField;
++import javax.swing.KeyStroke;
+ import javax.swing.Timer;
+ 
+ import org.apache.log4j.AppenderSkeleton;
+@@ -379,7 +381,8 @@
+     private JMenuBar createMenuBar() {
+ 
+ 	JMenu scanMenu = new JMenu("Scan");
+-	scanMenu.add(new AbstractAction("Scan Path1") {
++	scanMenu.setMnemonic('S');
++	JMenuItem sp1 = new JMenuItem(new AbstractAction("Scan Path1") {
+ 	    private static final long serialVersionUID = 4604811901635863259L;
+ 
+ 	    @Override
+@@ -392,8 +395,10 @@
+ 		}).start();
+ 	    }
+ 	});
++	sp1.setAccelerator(KeyStroke.getKeyStroke("1"));
++	scanMenu.add(sp1);
+ 
+-	scanMenu.add(new AbstractAction("Scan Path2") {
++	JMenuItem sp2 = new JMenuItem(new AbstractAction("Scan Path2") {
+ 	    private static final long serialVersionUID = 5505858980619274011L;
+ 
+ 	    @Override
+@@ -407,6 +412,8 @@
+ 	    }
+ 
+ 	});
++	sp1.setAccelerator(KeyStroke.getKeyStroke("2"));
++	scanMenu.add(sp2);
+ 
+ 	scanMenu.addSeparator();
+ 	scanMenu.add(new JLabel("skip Directories done after:"));

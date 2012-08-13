@@ -29,6 +29,12 @@
 			<version>1.2.16</version>
 		</dependency>
 
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>13.0</version>
+		</dependency>
+
 		<!-- aspectj for extreme logging --> <!-- 
 		<dependency>
 			<groupId>org.aspectj</groupId>
@@ -131,7 +137,7 @@
 					<archive>
 						<manifest>
 							<addClasspath>true</addClasspath>
-							<mainClass>com.googlecode.directory_scanner.ui.GUI</mainClass>
+							<mainClass>com.googlecode.directory_scanner.Main</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
@@ -142,7 +148,7 @@
 				<configuration>
 					<archive>
 						<manifest>
-							<mainClass>com.googlecode.directory_scanner.ui.GUI</mainClass>
+							<mainClass>com.googlecode.directory_scanner.Main</mainClass>
 						</manifest>
 					</archive>
 					<descriptorRefs>

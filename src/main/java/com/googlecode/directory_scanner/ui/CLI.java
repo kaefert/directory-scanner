@@ -8,8 +8,7 @@ import java.util.Properties;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import com.googlecode.directory_scanner.ConfigLoader;
-import com.googlecode.directory_scanner.Worker;
+import com.googlecode.directory_scanner.contracts.WorkManager;
 
 /**
  * @author kaefert
@@ -17,64 +16,59 @@ import com.googlecode.directory_scanner.Worker;
  */
 public class CLI {
 
-    private CLI() {
-	// this class does only exist for the main method, private constructor
-	// prevents instantiation
-    }
+    public CLI(String[] args, Logger logger, Properties config, WorkManager worker) {
 
-    /**
-     * @param args
-     */
-    public static void main(String[] args) {
+	// Logger logger = Logger.getLogger("directory-scanner-console-logger_"
+	// + args[0].hashCode());
+	// Properties config = new ConfigLoader(logger).getConfig();
+	// Worker worker = new Worker(logger, config);
 
-	if (args != null && args.length > 0) {
+	String command = null;
+	int num = 0;
 
-	    Logger logger = Logger.getLogger("directory-scanner-console-logger_" + args[0].hashCode());
-	    Properties config = new ConfigLoader(logger).getConfig();
-	    Worker worker = new Worker(logger, config);
+	for (String s : args) {
+	    logger.log(Level.INFO, "processing args[" + num + "]=" + s);
 
-	    String commmand = null;
-	    int num = 0;
+	    if (command == null) {
+		if ("scan".equals(s) || "rescan".equals(s) || "check_exists".equals(s)) {
+		    command = s;
+		} else if ("reset_done_directories".equals(s)) {
+		    config.setProperty("skipDirectoriesScannedAgo", "-2");
+		} else
+		    printHelp(true);
+	    } else {
 
-	    for (String s : args) {
-		logger.log(Level.INFO, "processing args[" + num + "]=" + s);
-
-		if (commmand == null) {
-		    if ("scan".equals(s) || "rescan".equals(s) || "check_exists".equals(s)) {
-			commmand = s;
-		    } else if ("reset_done_directories".equals(s)) {
-			worker.forgetDoneDirectories();
-		    } else
-			printHelp(true);
-		} else if ("scan".equals(commmand)) {
+		if ("scan".equals(command)) {
 		    worker.scanPath(s);
-		} else if ("rescan".equals(commmand)) {
-		    worker.forgetPath(s);
+		} else if ("rescan".equals(command)) {
+		    config.setProperty("skipDirectoriesScannedAgo", "-2");
 		    worker.scanPath(s);
-		} else if ("check_exists".equals(commmand)) {
-		    worker.printInfoOn(s);
+		} else if ("check_exists".equals(command)) {
+		    worker.checkExistence(s);
 		} else {
 		    logger.log(Level.ERROR, "unhandled stated, please share the call that caused this output with the developers!");
 		}
-
-		num++;
+		command = null;
 	    }
 
-	    System.out.println("");
-	    System.out.println("");
-	    logger.log(Level.INFO, "end of DirectoryScanner -> static void main");
+	    num++;
+	}
 
-	} else
-	    printHelp(false);
+	System.out.println("");
+	System.out.println("");
+	logger.log(Level.INFO, "end of DirectoryScanner -> static void main");
+
     }
 
-    private static void printHelp(boolean error) {
-	System.out.println("Error: given parameters did not match the specification below:");
-	System.out.println("");
+    private void printHelp(boolean error) {
+	if (error) {
+	    System.out.println("Error: given parameters did not match the specification below:");
+	    System.out.println("");
+	}
 	System.out.println("Welcome to DirectoryScanner Version 0.0.2 Snapshot");
 	System.out.println("");
-	System.out.println("This is a command line program, you need to pass it");
-	System.out.println("options so that it knows what to do.");
+	System.out.println("If you want to use the the GUI, don't pass arguments. ");
+	System.out.println("If you want to use the CLI, adjust your arguments to the description below:");
 	System.out.println("");
 	System.out.println("scan path");
 	System.out.println("--> scans the path");
@@ -84,10 +78,10 @@ public class CLI {
 	System.out.println("");
 	System.out.println("check_exists path");
 	System.out.println("--> goes through the paths in the database that are below the given path");
-//	System.out.println("--> and removes them from ");
+	// System.out.println("--> and removes them from ");
 	System.out.println("");
 	System.out.println("reset_done_directories");
-	System.out.println("--> delete all rows of the done directories table");
+	System.out.println("--> dont skip directories");
 	System.out.println("");
 	System.out.println("");
     }

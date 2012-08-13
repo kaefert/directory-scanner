@@ -1,4 +1,4 @@
-package com.googlecode.directory_scanner;
+package com.googlecode.directory_scanner.workers;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -8,25 +8,38 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.concurrent.BlockingQueue;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-public class PathWalker extends SimpleFileVisitor<Path> {
+import com.googlecode.directory_scanner.contracts.DirectorySkipDecider;
+import com.googlecode.directory_scanner.domain.PathVisit;
+
+public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 
     private Logger logger;
-    private Worker worker;
-    private String scanPath;
+    private Integer scanPathId;
+    private BlockingQueue<PathVisit> queue;
+    private DirectorySkipDecider skipDecider;
 
-    public PathWalker(Logger logger, Worker worker, String scanPath) {
+    public DirectoryTreeWalker(Logger logger, String scanPath, Integer scanPathId, BlockingQueue<PathVisit> queue, DirectorySkipDecider skipDecider) {
 	this.logger = logger;
-	this.worker = worker;
-	this.scanPath = scanPath;
-	
+	this.queue = queue;
+	this.skipDecider = skipDecider;
+
 	try {
 	    Path path = FileSystems.getDefault().getPath(scanPath);
+	    this.scanPathId = scanPathId;
 	    logger.info("starting scan with scanroot=\"" + scanPath + "\"");
 	    Files.walkFileTree(path, this);
+
+	    try {
+		queue.put(PathVisit.endOfQueue);
+	    } catch (InterruptedException e) {
+		logger.error("interrupted while trying to put FileVisit into queue", e);
+	    }
+
 	    logger.info("finished scan with scanroot=\"" + scanPath + "\"");
 
 	} catch (InvalidPathException e) {
@@ -41,22 +54,28 @@ public class PathWalker extends SimpleFileVisitor<Path> {
     @Override
     public FileVisitResult visitFile(Path file, BasicFileAttributes attr) {
 	if (attr.isSymbolicLink()) {
-	    logger.info("Found Symbolic link: " + file);
+	    logger.info("Found Symbolic link: " + file + "; size=" + attr.size());
 	}
 
 	if (attr.isRegularFile()) {
-	    logger.info("Found Regular file: " + file);
+	    logger.info("Found Regular file: " + file + "; size=" + attr.size());
 	}
 
 	if (attr.isOther()) {
-	    logger.info("Found Other file: " + file);
+	    logger.info("Found Other file: " + file + "; size=" + attr.size());
 	}
 
 	if (attr.isDirectory()) {
-	    logger.info("path given to visitFile method is a directory! --> " + file);
+	    logger
+	    .warn("path given to visitFile method is a directory, I think this will happen if a simlink links to a directory. I will not process this as file. path = "
+	    + file);
 	} else {
-	    logger.info("size = " + attr.size() + " bytes)");
-	    worker.scanFile(file, attr, scanPath);
+	    try {
+		queue.put(new PathVisit(scanPathId, file, attr.size(), PathVisit.Type.FILE));
+	    } catch (InterruptedException e) {
+		logger.error("interrupted while trying to put FileVisit into queue", e);
+	    }
+	    // worker.scanFile(file, attr, scanPathId);
 	}
 
 	// try {
@@ -72,12 +91,11 @@ public class PathWalker extends SimpleFileVisitor<Path> {
 
     @Override
     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-	if (worker.preScanDirectory(dir, attrs, scanPath)) {
+	if (skipDecider.decideDirectorySkip(dir, attrs)) {
 	    return FileVisitResult.SKIP_SUBTREE;
 	} else {
 	    return FileVisitResult.CONTINUE;
 	}
-
     }
 
     // Print each directory visited.
@@ -85,7 +103,13 @@ public class PathWalker extends SimpleFileVisitor<Path> {
     public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
 	// System.out.format("Directory: %s%n", dir);
 
-	worker.postScanDirectory(dir, exc, scanPath);
+	try {
+	    queue.put(new PathVisit(scanPathId, dir, -1, PathVisit.Type.FINISHED_DIRECTORY));
+	} catch (InterruptedException e) {
+	    logger.error("interrupted while trying to put FileVisit into queue", e);
+	}
+
+	// worker.postScanDirectory(dir, exc, scanPathId);
 	return FileVisitResult.CONTINUE;
     }
 
@@ -96,7 +120,12 @@ public class PathWalker extends SimpleFileVisitor<Path> {
     // is thrown.
     @Override
     public FileVisitResult visitFileFailed(Path file, IOException exc) {
-	worker.visitFileFailed(file, exc);
+	try {
+	    queue.put(new PathVisit(scanPathId, file, -1, PathVisit.Type.FAILURE));
+	} catch (InterruptedException e) {
+	    logger.error("interrupted while trying to put FileVisit into queue", e);
+	}
+	// worker.visitFileFailed(file, exc);
 	return FileVisitResult.CONTINUE;
     }
 }

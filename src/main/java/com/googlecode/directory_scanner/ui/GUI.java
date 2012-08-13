@@ -4,7 +4,6 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.EventQueue;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
@@ -12,14 +11,8 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
-import java.util.HashSet;
-import java.util.Properties;
+import java.util.concurrent.BlockingQueue;
 
 import javax.swing.AbstractAction;
 import javax.swing.BoxLayout;
@@ -30,6 +23,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JScrollBar;
@@ -37,6 +31,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.Timer;
 
 import org.apache.log4j.AppenderSkeleton;
@@ -44,13 +39,11 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.spi.LoggingEvent;
 
-import com.googlecode.directory_scanner.ConfigLoader;
-import com.googlecode.directory_scanner.Worker;
-import com.googlecode.directory_scanner.Worker.ReportMatch;
+import com.googlecode.directory_scanner.contracts.WorkManager;
+import com.googlecode.directory_scanner.domain.ReportMatch;
+import com.googlecode.directory_scanner.workers.AppConfig;
 
 public class GUI {
-
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 
     private JFrame frmDirectoryScanner;
 
@@ -67,25 +60,9 @@ public class GUI {
 
     private JCheckBox chckbxAutoscroll;
 
-    /**
-     * Launch the application.
-     */
-    public static void main(String[] args) {
-	EventQueue.invokeLater(new Runnable() {
-	    public void run() {
-		try {
-		    new GUI();
-
-		} catch (Exception e) {
-		    e.printStackTrace();
-		}
-	    }
-	});
-    }
-
     private Logger logger;
-    private Properties config;
-    private Worker worker;
+    private AppConfig config;
+    private WorkManager worker;
 
     private Date lastLogChange;
     private Level printLogToStatus;
@@ -93,10 +70,15 @@ public class GUI {
     /**
      * Create the application.
      */
-    public GUI() {
+    public GUI(Logger logger, AppConfig config, WorkManager worker) {
 
-	logger = Logger.getLogger("directory-scanner-gui-logger_" + this.hashCode());
-	config = new ConfigLoader(logger).getConfig();
+	this.logger = logger;
+	this.config = config;
+	this.worker = worker;
+
+	// logger = Logger.getLogger("directory-scanner-gui-logger_" +
+	// this.hashCode());
+	// config = new ConfigLoader(logger).getConfig();
 	printLogToStatus = Level.toLevel(config.getProperty("status-log-level"));
 
 	logger.addAppender(new AppenderSkeleton() {
@@ -113,7 +95,8 @@ public class GUI {
 	    @Override
 	    protected void append(LoggingEvent event) {
 		if (GUI.this.txtrLog != null && event.getLevel().toInt() >= printLogToStatus.toInt()) {
-		    GUI.this.txtrLog.append(formatter.format(new Date(event.timeStamp)) + " - " + event.getRenderedMessage() + "\n");
+		    String timeStamp = GUI.this.config.getDateFormatter().format(new Date(event.timeStamp));
+		    GUI.this.txtrLog.append(timeStamp + " - " + event.getRenderedMessage() + "\n");
 		    String[] t = event.getThrowableStrRep();
 		    if (t != null) {
 			for (String s : t) {
@@ -127,8 +110,6 @@ public class GUI {
 	});
 
 	initialize();
-
-	worker = new Worker(logger, config);
 
 	frmDirectoryScanner.setJMenuBar(createMenuBar());
 	frmDirectoryScanner.setVisible(true);
@@ -339,7 +320,8 @@ public class GUI {
 	northPanel.add(northFormPanel);
 	// northPanel.add(buttonPanel);
 
-	this.txtrLog = new JTextArea("warning: JTextArea is a piece of junk which will completly fill your memory with trash-data (if you want to display reaaaally lots of text in it). Therefore I set the level that will be printed to this field to 'ERROR'. If you want to see what the application is doing, run it from a terminal and look at the output there (or modify the properties file but be aware of the 'java.lang.OutOfMemoryError: Java heap space').");
+	this.txtrLog = new JTextArea(
+	"warning: JTextArea is a piece of junk which will completly fill your memory with trash-data\n(if you want to display reaaaally lots of text in it, like a detailed log..).\nTherefore I set the level that will be printed to this field to 'ERROR'.\nIf you want to see what the application is doing,\nrun it from a terminal and look at the output there\n(or modify the properties file but be aware of the 'java.lang.OutOfMemoryError: Java heap space').\n\n");
 	this.txtrLog.setEditable(false);
 	this.statusScrollPane = new JScrollPane(this.txtrLog);
 	this.scrollPaneVerticalBar = statusScrollPane.getVerticalScrollBar();
@@ -379,7 +361,8 @@ public class GUI {
     private JMenuBar createMenuBar() {
 
 	JMenu scanMenu = new JMenu("Scan");
-	scanMenu.add(new AbstractAction("Scan Path1") {
+	scanMenu.setMnemonic('S');
+	JMenuItem sp1 = new JMenuItem(new AbstractAction("Scan Path1") {
 	    private static final long serialVersionUID = 4604811901635863259L;
 
 	    @Override
@@ -392,8 +375,10 @@ public class GUI {
 		}).start();
 	    }
 	});
+	sp1.setAccelerator(KeyStroke.getKeyStroke("1"));
+	scanMenu.add(sp1);
 
-	scanMenu.add(new AbstractAction("Scan Path2") {
+	JMenuItem sp2 = new JMenuItem(new AbstractAction("Scan Path2") {
 	    private static final long serialVersionUID = 5505858980619274011L;
 
 	    @Override
@@ -407,20 +392,16 @@ public class GUI {
 	    }
 
 	});
+	sp2.setAccelerator(KeyStroke.getKeyStroke("2"));
+	scanMenu.add(sp2);
 
 	scanMenu.addSeparator();
 	scanMenu.add(new JLabel("skip Directories done after:"));
 
-	long skipDirectoriesScannedAgo = Long.valueOf(config.getProperty("skipDirectoriesScannedAgo"));
-	Date skipNewer = null;
-	if (skipDirectoriesScannedAgo == -1)
-	    skipNewer = new Date(new Date().getTime() + 315600000000L);
-	else if (skipDirectoriesScannedAgo < -1)
-	    skipNewer = new Date(0L);
-	else
-	    skipNewer = new Date(new Date().getTime() - skipDirectoriesScannedAgo);
+	Date skipNewer = config.getSkipDirectoriesDoneAfter();
+	
 
-	txtDate = new JTextField(formatter.format(skipNewer));
+	txtDate = new JTextField(config.getDateFormatter().format(skipNewer));
 	txtDate.addKeyListener(new KeyListener() {
 
 	    @Override
@@ -432,7 +413,9 @@ public class GUI {
 	    public void keyReleased(KeyEvent e) {
 		// logger.info("txtDate keyReleased!" + txtDate.getText());
 		try {
-		    worker.setSkipDirectoriesDoneAfter(formatter.parse(txtDate.getText()));
+		    config.getDateFormatter().parse(txtDate.getText());
+		    config.setProperty("skipDirectoriesDoneAfter", txtDate.getText());
+		    // worker.setSkipDirectoriesDoneAfter(formatter.parse(txtDate.getText()));
 		    txtDate.setBackground(Color.WHITE);
 		} catch (ParseException e1) {
 		    txtDate.setBackground(new Color(255, 170, 170));
@@ -453,22 +436,26 @@ public class GUI {
 	});
 	scanMenu.add(txtDate);
 
-	scanMenu.add(new AbstractAction("set current date") {
+	JMenuItem scd = new JMenuItem(new AbstractAction("set current date") {
 
 	    private static final long serialVersionUID = -4763799767860486881L;
 
 	    @Override
 	    public void actionPerformed(ActionEvent e) {
 		Date now = new Date();
-		txtDate.setText(formatter.format(now));
+		String nowString = config.getDateFormatter().format(now);
+		txtDate.setText(nowString);
 		txtDate.setBackground(Color.WHITE);
-		worker.setSkipDirectoriesDoneAfter(now);
+		config.setProperty("skipDirectoriesDoneAfter", nowString);
+		// worker.setSkipDirectoriesDoneAfter(now);
 	    }
 	});
+	scd.setMnemonic('c');
+	scanMenu.add(scd);
 
 	scanMenu.addSeparator();
 
-	scanMenu.add(new AbstractAction("Remove Path1% from Database") {
+	JMenuItem r1 = new JMenuItem(new AbstractAction("Remove Path1% from Database") {
 	    private static final long serialVersionUID = -8229587970729576138L;
 
 	    @Override
@@ -476,8 +463,10 @@ public class GUI {
 		worker.forgetPath(txtPath1.getText());
 	    }
 	});
+	r1.setMnemonic('r');
+	scanMenu.add(r1);
 
-	scanMenu.add(new AbstractAction("Remove Path2% from Database") {
+	JMenuItem r2 = new JMenuItem(new AbstractAction("Remove Path2% from Database") {
 	    private static final long serialVersionUID = -8229587970729576138L;
 
 	    @Override
@@ -485,9 +474,12 @@ public class GUI {
 		worker.forgetPath(txtPath2.getText());
 	    }
 	});
+	r2.setMnemonic('e');
+	scanMenu.add(r2);
 
 	JMenu toolsMenu = new JMenu("Tools");
-	toolsMenu.add(new AbstractAction("Switch Path1&2") {
+	toolsMenu.setMnemonic('T');
+	JMenuItem switc = new JMenuItem(new AbstractAction("Switch Path1&2") {
 	    private static final long serialVersionUID = -2431148865166087751L;
 
 	    @Override
@@ -497,8 +489,11 @@ public class GUI {
 		txtPath2.setText(path1);
 	    }
 	});
+	switc.setMnemonic('S');
+	toolsMenu.add(switc);
 
 	JMenu reportMenu = new JMenu("Reports");
+	reportMenu.setMnemonic('R');
 	reportMenu.add(new AbstractAction("Duplicates in Path1") {
 	    private static final long serialVersionUID = -2431148865166087751L;
 
@@ -507,7 +502,7 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findDuplicates(txtPath1.getText(), txtPath1.getText(), false));
+			doReport(worker.findFiles(txtPath1.getText(), txtPath1.getText(), true, getReportSortMode()));
 		    }
 		}).start();
 	    }
@@ -520,7 +515,7 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findDuplicates(txtPath1.getText(), null, false));
+			doReport(worker.findFiles(txtPath1.getText(), null, true, getReportSortMode()));
 		    }
 		}).start();
 	    }
@@ -533,7 +528,7 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findDuplicates(txtPath2.getText(), txtPath2.getText(), false));
+			doReport(worker.findFiles(txtPath2.getText(), txtPath2.getText(), true, getReportSortMode()));
 		    }
 		}).start();
 	    }
@@ -546,7 +541,7 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findDuplicates(txtPath2.getText(), null, false));
+			doReport(worker.findFiles(txtPath2.getText(), null, true, getReportSortMode()));
 		    }
 		}).start();
 	    }
@@ -559,7 +554,7 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findDuplicates(txtPath1.getText(), txtPath2.getText(), false));
+			doReport(worker.findFiles(txtPath1.getText(), txtPath2.getText(), true, getReportSortMode()));
 		    }
 		}).start();
 	    }
@@ -572,7 +567,7 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findDuplicates(txtPath1.getText(), txtPath2.getText(), true));
+			doReport(worker.findFiles(txtPath1.getText(), txtPath2.getText(), false, getReportSortMode()));
 		    }
 		}).start();
 	    }
@@ -585,7 +580,7 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findDuplicates(txtPath2.getText(), txtPath1.getText(), true));
+			doReport(worker.findFiles(txtPath2.getText(), txtPath1.getText(), false, getReportSortMode()));
 		    }
 		}).start();
 	    }
@@ -670,136 +665,114 @@ public class GUI {
 	return jMenuBar;
     }
 
-    private void doReport(HashSet<ReportMatch> matches) {
+    private void doReport(final BlockingQueue<ReportMatch> matches) {
 	if (txtrFileList.getText().length() > 2)
 	    txtrFileList.append("\n\n");
 
-	for (ReportMatch match : sortReportMatches(matches)) {
-	    if (reportSha1andSize.isSelected()) {
-		txtrFileList.append("\nMatch sha1=" + match.sha1 + "; size=" + match.size + "; count=" + match.fileIds.size() + "\n");
+	Thread processor = new Thread(new Runnable() {
+	    @Override
+	    public void run() {
+		while (true) {
+		    try {
+			ReportMatch match = matches.take();
+			if (match == ReportMatch.endOfQueue)
+			    break;
+			reportSingleMatch(match);
+		    } catch (InterruptedException e) {
+			logger.error("reportMatchesProcessor was interrupted", e);
+		    }
+		}
+		txtrFileList.append("end of report.");
 	    }
-	    if (reportAll.isSelected()) {
-		for (String path : match.paths) {
+	});
+	processor.start();
+    }
+
+    private void reportSingleMatch(ReportMatch match) {
+	if (reportSha1andSize.isSelected()) {
+	    txtrFileList.append("\nMatch sha1=" + config.getSha1HexString(match.getSha1()) + "; size=" + match.getSize() + "; count=" + match.getPaths().size() + "; totalSize=" + match.getSize()*match.getPaths().size() + "\n");
+	}
+	if (reportAll.isSelected()) {
+	    for (String path : match.getPaths()) {
+		txtrFileList.append(path + "\n");
+	    }
+	} else if (reportPath1.isSelected()) {
+	    for (String path : match.getPaths()) {
+		if (path.startsWith(txtPath1.getText()))
 		    txtrFileList.append(path + "\n");
+	    }
+	} else if (reportPath2.isSelected()) {
+	    for (String path : match.getPaths()) {
+		if (path.startsWith(txtPath2.getText()))
+		    txtrFileList.append(path + "\n");
+	    }
+	} else if (reportNotPath1.isSelected()) {
+	    for (String path : match.getPaths()) {
+		if (!path.startsWith(txtPath1.getText()))
+		    txtrFileList.append(path + "\n");
+	    }
+	} else if (reportNotPath2.isSelected()) {
+	    for (String path : match.getPaths()) {
+		if (!path.startsWith(txtPath2.getText()))
+		    txtrFileList.append(path + "\n");
+	    }
+	} else if (report1stPath1.isSelected()) {
+	    for (String path : match.getPaths()) {
+		if (path.startsWith(txtPath1.getText())) {
+		    txtrFileList.append(path + "\n");
+		    break;
 		}
-	    } else if (reportPath1.isSelected()) {
-		for (String path : match.paths) {
-		    if (path.startsWith(txtPath1.getText()))
-			txtrFileList.append(path + "\n");
+	    }
+	} else if (report1stPath2.isSelected()) {
+	    for (String path : match.getPaths()) {
+		if (path.startsWith(txtPath2.getText())) {
+		    txtrFileList.append(path + "\n");
+		    break;
 		}
-	    } else if (reportPath2.isSelected()) {
-		for (String path : match.paths) {
-		    if (path.startsWith(txtPath2.getText()))
-			txtrFileList.append(path + "\n");
-		}
-	    } else if (reportNotPath1.isSelected()) {
-		for (String path : match.paths) {
-		    if (!path.startsWith(txtPath1.getText()))
-			txtrFileList.append(path + "\n");
-		}
-	    } else if (reportNotPath2.isSelected()) {
-		for (String path : match.paths) {
-		    if (!path.startsWith(txtPath2.getText()))
-			txtrFileList.append(path + "\n");
-		}
-	    } else if (report1stPath1.isSelected()) {
-		for (String path : match.paths) {
+	    }
+	} else if (reportAllBut1stPath1.isSelected()) {
+	    boolean firstSkipped = false;
+	    for (String path : match.getPaths()) {
+		if (firstSkipped) {
+		    txtrFileList.append(path + "\n");
+		} else {
 		    if (path.startsWith(txtPath1.getText())) {
+			firstSkipped = true;
+		    } else {
 			txtrFileList.append(path + "\n");
-			break;
 		    }
 		}
-	    } else if (report1stPath2.isSelected()) {
-		for (String path : match.paths) {
+	    }
+	} else if (reportAllBut1stPath2.isSelected()) {
+	    boolean firstSkipped = false;
+	    for (String path : match.getPaths()) {
+		if (firstSkipped) {
+		    txtrFileList.append(path + "\n");
+		} else {
 		    if (path.startsWith(txtPath2.getText())) {
-			txtrFileList.append(path + "\n");
-			break;
-		    }
-		}
-	    } else if (reportAllBut1stPath1.isSelected()) {
-		boolean firstSkipped = false;
-		for (String path : match.paths) {
-		    if (firstSkipped) {
-			txtrFileList.append(path + "\n");
+			firstSkipped = true;
 		    } else {
-			if (path.startsWith(txtPath1.getText())) {
-			    firstSkipped = true;
-			} else {
-			    txtrFileList.append(path + "\n");
-			}
-		    }
-		}
-	    } else if (reportAllBut1stPath2.isSelected()) {
-		boolean firstSkipped = false;
-		for (String path : match.paths) {
-		    if (firstSkipped) {
 			txtrFileList.append(path + "\n");
-		    } else {
-			if (path.startsWith(txtPath2.getText())) {
-			    firstSkipped = true;
-			} else {
-			    txtrFileList.append(path + "\n");
-			}
 		    }
 		}
 	    }
 	}
     }
 
-    private Collection<ReportMatch> sortReportMatches(HashSet<ReportMatch> matches) {
+    private ReportMatch.Sort getReportSortMode() {
 	if (sortNot.isSelected()) {
-	    return matches;
-	} else {
-	    ArrayList<ReportMatch> listOfMatches = new ArrayList<>(matches);
-	    if (sortCount.isSelected()) {
-		Collections.sort(listOfMatches, CompareMatchByCount);
-	    } else if (sortSize.isSelected()) {
-		Collections.sort(listOfMatches, CompareMatchBySize);
-	    } else if (sortSizeCount.isSelected()) {
-		Collections.sort(listOfMatches, CompareMatchBySizeTimesCount);
-	    }
-	    return listOfMatches;
+	    return ReportMatch.Sort.NOSORT;
+	} else if (sortCount.isSelected()) {
+	    return ReportMatch.Sort.COUNT;
+	} else if (sortSize.isSelected()) {
+	    return ReportMatch.Sort.SIZE;
+	} else if (sortSizeCount.isSelected()) {
+	    return ReportMatch.Sort.SIZETIMESCOUNT;
 	}
+
+	logger.error("inconsistent gui state - sortMode");
+	return ReportMatch.Sort.NOSORT;
     }
-
-    private static Comparator<ReportMatch> CompareMatchBySize = new Comparator<ReportMatch>() {
-	@Override
-	public int compare(ReportMatch o1, ReportMatch o2) {
-	    if (o1.size < o2.size)
-		return 1;
-	    if (o1.size > o2.size)
-		return -1;
-	    return 0;
-	}
-    };
-
-    private static Comparator<ReportMatch> CompareMatchByCount = new Comparator<ReportMatch>() {
-	@Override
-	public int compare(ReportMatch o1, ReportMatch o2) {
-	    if (o1.fileIds.size() < o2.fileIds.size())
-		return 1;
-	    if (o1.fileIds.size() > o2.fileIds.size())
-		return -1;
-	    return 0;
-	}
-    };
-
-    private static Comparator<ReportMatch> CompareMatchBySizeTimesCount = new Comparator<ReportMatch>() {
-	@Override
-	public int compare(ReportMatch o1, ReportMatch o2) {
-	    long val1 = o1.fileIds.size() * o1.size;
-	    long val2 = o2.fileIds.size() * o2.size;
-	    if (val1 < val2)
-		return 1;
-	    if (val1 > val2)
-		return -1;
-	    if (o1.fileIds.size() < o2.fileIds.size())
-		return 1;
-	    if (o1.fileIds.size() > o2.fileIds.size())
-		return -1;
-	    return 0;
-	}
-    };
 
     final javax.swing.Timer timer = new Timer(1000, new ActionListener() {
 
@@ -813,7 +786,7 @@ public class GUI {
 		scrollPaneVerticalBar.setValue(scrollPaneVerticalBar.getMaximum());
 		lastRefresh = new Date();
 	    }
-//	    System.gc(); // Explicit GC!
+	    // System.gc(); // Explicit GC!
 	}
     });
 }

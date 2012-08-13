@@ -588,10 +588,10 @@ public class GUI {
 
 	reportMenu.addSeparator();
 
-	sortNot = new JRadioButtonMenuItem("don't sort", true);
+	sortNot = new JRadioButtonMenuItem("don't sort");
 	sortSize = new JRadioButtonMenuItem("sort by size");
 	sortCount = new JRadioButtonMenuItem("sort by count");
-	sortSizeCount = new JRadioButtonMenuItem("sort by size*count");
+	sortSizeCount = new JRadioButtonMenuItem("sort by size*count", true);
 
 	ButtonGroup sortOptions = new ButtonGroup();
 	sortOptions.add(sortNot);
@@ -607,7 +607,7 @@ public class GUI {
 
 	reportMenu.addSeparator();
 
-	reportSha1andSize = new JCheckBoxMenuItem("report sha1 & size");
+	reportSha1andSize = new JCheckBoxMenuItem("report sha1 & size", true);
 	reportMenu.add(reportSha1andSize);
 
 	reportMenu.addSeparator();

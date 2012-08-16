@@ -344,7 +344,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	if (path1 == null)
 	    throw new IllegalArgumentException("path1 must not be null!");
 
-	final BlockingQueue<ReportMatch> queue = new ArrayBlockingQueue<>(10000);
+	final BlockingQueue<ReportMatch> queue = new ArrayBlockingQueue<>(config.getQueueLength());
 
 	new Thread(new Runnable() {
 	    @Override
@@ -428,7 +428,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
     @Override
     public BlockingQueue<ReportMatch> findSha1Collisions() {
 
-	final BlockingQueue<ReportMatch> queue = new ArrayBlockingQueue<>(10000);
+	final BlockingQueue<ReportMatch> queue = new ArrayBlockingQueue<>(config.getQueueLength());
 
 	new Thread(new Runnable() {
 	    @Override
@@ -487,7 +487,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
     @Override
     public BlockingQueue<String> findDirectoriesBelow(final String path) {
-	final BlockingQueue<String> queue = new ArrayBlockingQueue<>(10000);
+	final BlockingQueue<String> queue = new ArrayBlockingQueue<>(config.getQueueLength());
 
 	new Thread(new Runnable() {
 	    @Override

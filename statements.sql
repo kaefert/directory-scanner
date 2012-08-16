@@ -194,3 +194,5 @@ WHERE EXISTS (
 	WHERE ff.sha1 = f.sha1 
 	AND ff.size <> f.size 
 )
+
+SELECT * FROM failures

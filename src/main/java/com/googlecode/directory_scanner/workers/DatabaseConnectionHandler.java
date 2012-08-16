@@ -15,6 +15,7 @@ public class DatabaseConnectionHandler {
 
     private Logger logger;
     private Properties appConfig;
+    private boolean useFallback = false;
 
     public DatabaseConnectionHandler(Logger logger, Properties config) {
 	this.logger = logger;
@@ -31,6 +32,9 @@ public class DatabaseConnectionHandler {
 	if (connections == null) {
 	    connections = new HashMap<String, Connection>();
 	}
+	if(useFallback)
+	    return connections.get("");
+	
 	if (connections.get(databaseName) == null) {
 
 	    try {
@@ -49,20 +53,36 @@ public class DatabaseConnectionHandler {
 		    createDatabase(databaseName);
 		    return getConnection(databaseName);
 		} else {
-		    logger.error("Failed to connect database-server without supplying a database-name.", e);
+		    logger.error("Failed to connect database-server without supplying a database-name, using fallback db", e);
+		    return getFallbackDatabase();
 		}
-
-		e.printStackTrace();
 	    }
 
 	}
 	return connections.get(databaseName);
     }
 
+    private Connection getFallbackDatabase() {
+	try {
+	    Class.forName(appConfig.getProperty("dbFallBackDriver")).newInstance();
+	    Connection connection = DriverManager.getConnection(appConfig.getProperty("dbFallBackURL"), appConfig.getProperty("dbFallBackUser"),
+	    appConfig.getProperty("dbFallBackPassword"));
+	    connections.put("", connection);
+	    useFallback = true;
+	    return connection;
+
+	} catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+	    logger.error("Failed to load fallback-database-drivers!", e);
+	} catch (SQLException e) {
+	    logger.error("Failed to connect fallback-database-server!", e);
+	}
+	return null;
+    }
+
     private void createDatabase(String databaseName) {
 	try {
 	    Connection global = getConnection("");
-	    if (global != null) {
+	    if (global != null && !useFallback) { //fallback is a single database, doesn't need create database statement
 		PreparedStatement createDB = global.prepareStatement("create Database " + databaseName + ";");
 		// createDB.setString(1, databaseName);
 		createDB.execute();
@@ -104,7 +124,10 @@ public class DatabaseConnectionHandler {
 	try {
 	    Connection global = getConnection();
 	    if (global != null) {
-		PreparedStatement createTable = global.prepareStatement(appConfig.getProperty("sql_createTableDirectories"));
+		String sql = appConfig.getProperty("sql_createTableDirectories");
+		if(useFallback)
+		    sql = sql.replace(" ENGINE=InnoDB", "");
+		PreparedStatement createTable = global.prepareStatement(sql);
 		createTable.execute();
 		createTable.close();
 	    }
@@ -119,11 +142,14 @@ public class DatabaseConnectionHandler {
     public void createFilesTable(SQLException e) {
 	if (createFilesTableFailed)
 	    throw new IllegalStateException("database cannot be used, could not create files table", e);
-	
+
 	try {
 	    Connection global = getConnection();
 	    if (global != null) {
-		PreparedStatement createTable = global.prepareStatement(appConfig.getProperty("sql_createTableFiles"));
+		String sql = appConfig.getProperty("sql_createTableFiles");
+		if(useFallback)
+		    sql = sql.replace(" ENGINE=InnoDB", "");
+		PreparedStatement createTable = global.prepareStatement(sql);
 		createTable.execute();
 		createTable.close();
 	    }
@@ -138,11 +164,14 @@ public class DatabaseConnectionHandler {
     public void createFailuresTable(SQLException e) {
 	if (createFailuresTableFailed)
 	    throw new IllegalStateException("database cannot be used, could not create files table", e);
-	
+
 	try {
 	    Connection global = getConnection();
 	    if (global != null) {
-		PreparedStatement createTable = global.prepareStatement(appConfig.getProperty("sql_createTableFailures"));
+		String sql = appConfig.getProperty("sql_createTableFailures");
+		if(useFallback)
+		    sql = sql.replace(" ENGINE=InnoDB", "");
+		PreparedStatement createTable = global.prepareStatement(sql);
 		createTable.execute();
 		createTable.close();
 	    }

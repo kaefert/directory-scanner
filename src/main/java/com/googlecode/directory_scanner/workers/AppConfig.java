@@ -19,6 +19,15 @@ public class AppConfig extends Properties {
      */
     private static final long serialVersionUID = 2402741572495774673L;
 
+    public static String getSha1HexString(byte[] sha1) {
+	String result = "";
+	for (int i = 0; i < sha1.length; i++) {
+	    result += Integer.toString((sha1[i] & 0xff) + 0x100, 16).substring(1);
+	}
+	return result;
+    }
+
+    
     private Logger logger;
     private String[] propertyPaths = new String[] { "./DirectoryScanner.properties", "/DirectoryScanner.properties", "DirectoryScanner.properties" };
     private Thread loader;
@@ -43,14 +52,10 @@ public class AppConfig extends Properties {
 	return dateFormatter;
     }
 
-    public String getSha1HexString(byte[] sha1) {
-	String result = "";
-	for (int i = 0; i < sha1.length; i++) {
-	    result += Integer.toString((sha1[i] & 0xff) + 0x100, 16).substring(1);
-	}
-	return result;
+    public int getQueueLength() {
+	return Integer.valueOf(getProperty("queueLength"));
     }
-
+    
     public Date getSkipDirectoriesDoneAfter() {
 	String dateProp = getProperty("skipDirectoriesDoneAfter");
 	Date returnValue = null;

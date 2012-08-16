@@ -55,8 +55,7 @@ public class WorkManagerImpl implements WorkManager {
 
 	Date after = config.getSkipDirectoriesDoneAfter();
 	int cacheDoneDirectories = Integer.parseInt(config.getProperty("cacheDoneDirectories"));
-	int cacheFiles = Integer.parseInt(config.getProperty("cacheDoneDirectories"));
-	final SkipDecider skipDecider = new SkipDeciderImpl(pathString, after, cacheDoneDirectories, cacheFiles, db);
+	final SkipDecider skipDecider = new SkipDeciderImpl(pathString, after, cacheDoneDirectories, 0, db);
 
 	new Thread(new Runnable() {
 	    @Override
@@ -69,7 +68,7 @@ public class WorkManagerImpl implements WorkManager {
 	new Thread(new Runnable() {
 	    @Override
 	    public void run() {
-		new PathVisitProcessor(queue, logger, db, "1".equals(config.getProperty("doneFiles")) ? skipDecider : null);
+		new PathVisitProcessor(queue, logger, db, "1".equals(config.getProperty("doneFiles")) ? skipDecider : null, config);
 	    }
 	}).start();
     }
@@ -93,9 +92,9 @@ public class WorkManagerImpl implements WorkManager {
 		    logger.warn("directory does not exist any more! deleting from db --> " + dbPath);
 		    db.forgetDirectoryTree(dbPath);
 		}
-		else {
-		    logger.info("directory from db still exists in filesystem (do nothing) -> " + dbPath);
-		}
+//		else {
+//		    logger.info("directory from db still exists in filesystem (do nothing) -> " + dbPath);
+//		}
 		
 	    } catch (InterruptedException e) {
 		logger.error("interrupted while taking Path String from dirQueue (or putting into scanQeue)", e);
@@ -106,11 +105,11 @@ public class WorkManagerImpl implements WorkManager {
 	BlockingQueue<ReportMatch> fileQueue = db.findFiles(path, null, false, Sort.NOSORT);
 	
 	final Integer scanDir = db.getDirectoryId(path, true);
-	final BlockingQueue<PathVisit> scanQueue = new ArrayBlockingQueue<>(1000);
+	final BlockingQueue<PathVisit> scanQueue = new ArrayBlockingQueue<>(config.getQueueLength());
 	new Thread(new Runnable() {
 	    @Override
 	    public void run() {
-		new PathVisitProcessor(scanQueue, logger, db, null);
+		new PathVisitProcessor(scanQueue, logger, db, null, config);
 	    }
 	}).start();
 
@@ -127,11 +126,6 @@ public class WorkManagerImpl implements WorkManager {
 		for (StoredFile stored : reportMatch.getStore()) {
 
 		    Path ioPath = Paths.get(stored.getFullPath());
-		    // if (Files.exists(ioPath, (LinkOption) null)) {
-		    // logger.warn("file does not exist anymore -> " +
-		    // stored.getFullPath());
-		    // // TODO: remove file from database
-		    // } else {
 
 		    try {
 			BasicFileAttributes attr = Files.readAttributes(ioPath, BasicFileAttributes.class, new LinkOption[] {});
@@ -158,9 +152,10 @@ public class WorkManagerImpl implements WorkManager {
 			    // pathVisit.fileScanned(sha1WithSize.getBytesRead(),
 			    // sha1WithSize.getSha1());
 			}
-			else {
-			    logger.info("db is up to date for file -> " + stored.getFullPath());
-			}
+			// else {
+			// logger.info("db is up to date for file -> " +
+			// stored.getFullPath());
+			//	}
 
 		    } catch (IOException e) {
 			logger.warn("file does not exist anymore -> " + stored.getFullPath());

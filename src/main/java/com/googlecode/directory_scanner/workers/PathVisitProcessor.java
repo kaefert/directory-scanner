@@ -19,14 +19,16 @@ public class PathVisitProcessor {
     private DatabaseWorker db;
     private Logger logger;
     private SkipDecider skipDecider;
+    private AppConfig config;
 
-    public PathVisitProcessor(BlockingQueue<PathVisit> queue, Logger logger, DatabaseWorker db, SkipDecider skipDecider) {
+    public PathVisitProcessor(BlockingQueue<PathVisit> queue, Logger logger, DatabaseWorker db, SkipDecider skipDecider, AppConfig config) {
 	this.queue = queue;
 	this.logger = logger;
 	this.db = db;
 	this.skipDecider = skipDecider;
+	this.config = config;
 
-	dbInsertQueue = new ArrayBlockingQueue<>(10000);
+	dbInsertQueue = new ArrayBlockingQueue<>(this.config.getQueueLength());
 
 	new Thread(new Runnable() {
 	    @Override

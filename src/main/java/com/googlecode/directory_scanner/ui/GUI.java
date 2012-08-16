@@ -60,6 +60,7 @@ public class GUI {
     private JCheckBoxMenuItem reportSha1andSize;
 
     private JCheckBox chckbxAutoscroll;
+    private JTabbedPane tabPane;
 
     private Logger logger;
     private AppConfig config;
@@ -350,7 +351,7 @@ public class GUI {
 	fileListPanel.add(fileListOptionsPanel, BorderLayout.SOUTH);
 	fileListPanel.add(fileListScrollPane, BorderLayout.CENTER);
 
-	JTabbedPane tabPane = new JTabbedPane();
+	tabPane = new JTabbedPane();
 	// centerPanel.setLayout(new CardLayout());
 	tabPane.add(statusPanel, "Status");
 	tabPane.add(fileListPanel, "Files");
@@ -636,7 +637,7 @@ public class GUI {
 	    }
 	});
 	reportMenu.add(new AbstractAction("Files in Path1 not in Path2") {
-	    private static final long serialVersionUID = -2431148865166087751L;
+	    private static final long serialVersionUID = -2431148865166087753L;
 
 	    @Override
 	    public void actionPerformed(ActionEvent e) {
@@ -662,7 +663,7 @@ public class GUI {
 	    }
 	});
 	reportMenu.add(new AbstractAction("sha1 Collisions") {
-	    private static final long serialVersionUID = -2431148865166087751L;
+	    private static final long serialVersionUID = -2431148865166087752L;
 
 	    @Override
 	    public void actionPerformed(ActionEvent e) {
@@ -755,6 +756,9 @@ public class GUI {
     }
 
     private void doReport(final BlockingQueue<ReportMatch> matches) {
+	
+	tabPane.setSelectedIndex(1);
+	
 	if (txtrFileList.getText().length() > 2)
 	    txtrFileList.append("\n\n");
 
@@ -779,7 +783,7 @@ public class GUI {
 
     private void reportSingleMatch(ReportMatch match) {
 	if (reportSha1andSize.isSelected()) {
-	    txtrFileList.append("\nMatch sha1=" + config.getSha1HexString(match.getSha1()) + "; size=" + match.getSize() + "; count=" + match.getStore().size() + "; totalSize=" + match.getSize()*match.getStore().size() + "\n");
+	    txtrFileList.append("\nMatch sha1=" + AppConfig.getSha1HexString(match.getSha1()) + "; size=" + match.getSize() + "; count=" + match.getStore().size() + "; totalSize=" + match.getSize()*match.getStore().size() + "\n");
 	}
 	if (reportAll.isSelected()) {
 	    for(StoredFile file : match.getStore()) {

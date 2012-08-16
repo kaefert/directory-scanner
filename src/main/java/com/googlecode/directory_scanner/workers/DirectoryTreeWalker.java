@@ -13,7 +13,7 @@ import java.util.concurrent.BlockingQueue;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import com.googlecode.directory_scanner.contracts.DirectorySkipDecider;
+import com.googlecode.directory_scanner.contracts.SkipDecider;
 import com.googlecode.directory_scanner.domain.PathVisit;
 
 public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
@@ -21,9 +21,9 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
     private Logger logger;
     private Integer scanPathId;
     private BlockingQueue<PathVisit> queue;
-    private DirectorySkipDecider skipDecider;
+    private SkipDecider skipDecider;
 
-    public DirectoryTreeWalker(Logger logger, String scanPath, Integer scanPathId, BlockingQueue<PathVisit> queue, DirectorySkipDecider skipDecider) {
+    public DirectoryTreeWalker(Logger logger, String scanPath, Integer scanPathId, BlockingQueue<PathVisit> queue, SkipDecider skipDecider) {
 	this.logger = logger;
 	this.queue = queue;
 	this.skipDecider = skipDecider;
@@ -71,7 +71,7 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 	    + file);
 	} else {
 	    try {
-		queue.put(new PathVisit(scanPathId, file, attr.size(), PathVisit.Type.FILE));
+		queue.put(new PathVisit(scanPathId, file, attr, PathVisit.Type.FILE));
 	    } catch (InterruptedException e) {
 		logger.error("interrupted while trying to put FileVisit into queue", e);
 	    }
@@ -104,7 +104,7 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 	// System.out.format("Directory: %s%n", dir);
 
 	try {
-	    queue.put(new PathVisit(scanPathId, dir, -1, PathVisit.Type.FINISHED_DIRECTORY));
+	    queue.put(new PathVisit(scanPathId, dir, null, PathVisit.Type.FINISHED_DIRECTORY));
 	} catch (InterruptedException e) {
 	    logger.error("interrupted while trying to put FileVisit into queue", e);
 	}
@@ -121,7 +121,7 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
     @Override
     public FileVisitResult visitFileFailed(Path file, IOException exc) {
 	try {
-	    queue.put(new PathVisit(scanPathId, file, -1, PathVisit.Type.FAILURE));
+	    queue.put(new PathVisit(scanPathId, file, null, PathVisit.Type.FAILURE));
 	} catch (InterruptedException e) {
 	    logger.error("interrupted while trying to put FileVisit into queue", e);
 	}

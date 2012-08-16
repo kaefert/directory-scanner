@@ -41,6 +41,7 @@ import org.apache.log4j.spi.LoggingEvent;
 
 import com.googlecode.directory_scanner.contracts.WorkManager;
 import com.googlecode.directory_scanner.domain.ReportMatch;
+import com.googlecode.directory_scanner.domain.StoredFile;
 import com.googlecode.directory_scanner.workers.AppConfig;
 
 public class GUI {
@@ -460,7 +461,12 @@ public class GUI {
 
 	    @Override
 	    public void actionPerformed(ActionEvent e) {
-		worker.forgetPath(txtPath1.getText());
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			worker.forgetPath(txtPath1.getText());
+		    }
+		}).start();
 	    }
 	});
 	r1.setMnemonic('r');
@@ -471,12 +477,55 @@ public class GUI {
 
 	    @Override
 	    public void actionPerformed(ActionEvent e) {
-		worker.forgetPath(txtPath2.getText());
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			worker.forgetPath(txtPath2.getText());
+		    }
+		}).start();
 	    }
 	});
 	r2.setMnemonic('e');
 	scanMenu.add(r2);
 
+	scanMenu.addSeparator();
+	
+
+	JMenuItem ce = new JMenuItem(new AbstractAction("Check Files below Path1%") {
+	    private static final long serialVersionUID = -8229587970729576138L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			worker.checkExistence(txtPath1.getText());
+		    }
+		}).start();
+	    }
+	});
+	ce.setToolTipText("files stored in the database are checked for existence and same size & lastmodifieddate");
+	ce.setMnemonic('h');
+	scanMenu.add(ce);
+
+
+	JMenuItem ce1 = new JMenuItem(new AbstractAction("Check Files below Path2%") {
+	    private static final long serialVersionUID = -8229587970729576138L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			worker.checkExistence(txtPath2.getText());
+		    }
+		}).start();
+	    }
+	});
+	ce1.setToolTipText("files stored in the database are checked for existence and same size & lastmodifieddate");
+	ce1.setMnemonic('k');
+	scanMenu.add(ce1);
+	
 	JMenu toolsMenu = new JMenu("Tools");
 	toolsMenu.setMnemonic('T');
 	JMenuItem switc = new JMenuItem(new AbstractAction("Switch Path1&2") {
@@ -494,6 +543,20 @@ public class GUI {
 
 	JMenu reportMenu = new JMenu("Reports");
 	reportMenu.setMnemonic('R');
+
+	reportMenu.add(new AbstractAction("Files in Path1") {
+	    private static final long serialVersionUID = -2431148865166087751L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			doReport(worker.findFiles(txtPath1.getText(), null, false, getReportSortMode()));
+		    }
+		}).start();
+	    }
+	});
 	reportMenu.add(new AbstractAction("Duplicates in Path1") {
 	    private static final long serialVersionUID = -2431148865166087751L;
 
@@ -516,6 +579,19 @@ public class GUI {
 		    @Override
 		    public void run() {
 			doReport(worker.findFiles(txtPath1.getText(), null, true, getReportSortMode()));
+		    }
+		}).start();
+	    }
+	});
+	reportMenu.add(new AbstractAction("Files in Path2") {
+	    private static final long serialVersionUID = -2431148865166087751L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			doReport(worker.findFiles(txtPath2.getText(), null, false, getReportSortMode()));
 		    }
 		}).start();
 	    }
@@ -573,6 +649,19 @@ public class GUI {
 	    }
 	});
 	reportMenu.add(new AbstractAction("Files in Path2 not in Path1") {
+	    private static final long serialVersionUID = -2431148865166087751L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			doReport(worker.findFiles(txtPath2.getText(), txtPath1.getText(), false, getReportSortMode()));
+		    }
+		}).start();
+	    }
+	});
+	reportMenu.add(new AbstractAction("sha1 Collisions") {
 	    private static final long serialVersionUID = -2431148865166087751L;
 
 	    @Override
@@ -690,69 +779,69 @@ public class GUI {
 
     private void reportSingleMatch(ReportMatch match) {
 	if (reportSha1andSize.isSelected()) {
-	    txtrFileList.append("\nMatch sha1=" + config.getSha1HexString(match.getSha1()) + "; size=" + match.getSize() + "; count=" + match.getPaths().size() + "; totalSize=" + match.getSize()*match.getPaths().size() + "\n");
+	    txtrFileList.append("\nMatch sha1=" + config.getSha1HexString(match.getSha1()) + "; size=" + match.getSize() + "; count=" + match.getStore().size() + "; totalSize=" + match.getSize()*match.getStore().size() + "\n");
 	}
 	if (reportAll.isSelected()) {
-	    for (String path : match.getPaths()) {
-		txtrFileList.append(path + "\n");
+	    for(StoredFile file : match.getStore()) {
+		txtrFileList.append(file.getFullPath() + "\n");
 	    }
 	} else if (reportPath1.isSelected()) {
-	    for (String path : match.getPaths()) {
-		if (path.startsWith(txtPath1.getText()))
-		    txtrFileList.append(path + "\n");
+	    for(StoredFile file : match.getStore()) {
+		if (file.getFullPath().startsWith(txtPath1.getText()))
+		    txtrFileList.append(file.getFullPath() + "\n");
 	    }
 	} else if (reportPath2.isSelected()) {
-	    for (String path : match.getPaths()) {
-		if (path.startsWith(txtPath2.getText()))
-		    txtrFileList.append(path + "\n");
+	    for(StoredFile file : match.getStore()) {
+		if (file.getFullPath().startsWith(txtPath2.getText()))
+		    txtrFileList.append(file.getFullPath() + "\n");
 	    }
 	} else if (reportNotPath1.isSelected()) {
-	    for (String path : match.getPaths()) {
-		if (!path.startsWith(txtPath1.getText()))
-		    txtrFileList.append(path + "\n");
+	    for(StoredFile file : match.getStore()) {
+		if (!file.getFullPath().startsWith(txtPath1.getText()))
+		    txtrFileList.append(file.getFullPath() + "\n");
 	    }
 	} else if (reportNotPath2.isSelected()) {
-	    for (String path : match.getPaths()) {
-		if (!path.startsWith(txtPath2.getText()))
-		    txtrFileList.append(path + "\n");
+	    for(StoredFile file : match.getStore()) {
+		if (!file.getFullPath().startsWith(txtPath2.getText()))
+		    txtrFileList.append(file.getFullPath() + "\n");
 	    }
 	} else if (report1stPath1.isSelected()) {
-	    for (String path : match.getPaths()) {
-		if (path.startsWith(txtPath1.getText())) {
-		    txtrFileList.append(path + "\n");
+	    for(StoredFile file : match.getStore()) {
+		if (file.getFullPath().startsWith(txtPath1.getText())) {
+		    txtrFileList.append(file.getFullPath() + "\n");
 		    break;
-		}
+		}   
 	    }
 	} else if (report1stPath2.isSelected()) {
-	    for (String path : match.getPaths()) {
-		if (path.startsWith(txtPath2.getText())) {
-		    txtrFileList.append(path + "\n");
+	    for(StoredFile file : match.getStore()) {
+		if (file.getFullPath().startsWith(txtPath2.getText())) {
+		    txtrFileList.append(file.getFullPath() + "\n");
 		    break;
-		}
+		}   
 	    }
 	} else if (reportAllBut1stPath1.isSelected()) {
 	    boolean firstSkipped = false;
-	    for (String path : match.getPaths()) {
+	    for (StoredFile file : match.getStore()) {
 		if (firstSkipped) {
-		    txtrFileList.append(path + "\n");
+		    txtrFileList.append(file.getFullPath() + "\n");
 		} else {
-		    if (path.startsWith(txtPath1.getText())) {
+		    if (file.getFullPath().startsWith(txtPath1.getText())) {
 			firstSkipped = true;
 		    } else {
-			txtrFileList.append(path + "\n");
+			txtrFileList.append(file.getFullPath() + "\n");
 		    }
 		}
 	    }
 	} else if (reportAllBut1stPath2.isSelected()) {
 	    boolean firstSkipped = false;
-	    for (String path : match.getPaths()) {
+	    for (StoredFile file : match.getStore()) {
 		if (firstSkipped) {
-		    txtrFileList.append(path + "\n");
+		    txtrFileList.append(file.getFullPath() + "\n");
 		} else {
-		    if (path.startsWith(txtPath2.getText())) {
+		    if (file.getFullPath().startsWith(txtPath2.getText())) {
 			firstSkipped = true;
 		    } else {
-			txtrFileList.append(path + "\n");
+			txtrFileList.append(file.getFullPath() + "\n");
 		    }
 		}
 	    }

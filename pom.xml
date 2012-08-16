@@ -35,7 +35,7 @@
 			<version>13.0</version>
 		</dependency>
 
-		<!-- aspectj for extreme logging --> <!-- 
+		<!-- aspectj for extreme logging --> <!-- --> 
 		<dependency>
 			<groupId>org.aspectj</groupId>
 			<artifactId>aspectjrt</artifactId>
@@ -45,7 +45,7 @@
 			<groupId>org.aspectj</groupId>
 			<artifactId>aspectjtools</artifactId>
 			<version>${aspectj.version}</version>
-		</dependency> -->
+		</dependency>
 
 		<!-- <dependency> <groupId>commons-collections</groupId> <artifactId>commons-collections</artifactId> 
 			<version>3.2.1</version> </dependency> -->
@@ -67,7 +67,7 @@
 
 		<plugins>
 
-			<!-- aspectj for extreme logging --> <!-- 
+			<!-- aspectj for extreme logging --> <!-- --> 
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>aspectj-maven-plugin</artifactId>
@@ -80,7 +80,7 @@
 					<Xlint>ignore</Xlint>
 					<complianceLevel>${compiler.version}</complianceLevel>
 					<encoding>UTF-8</encoding>
-					<verbose>true</verbose>
+					<verbose>false</verbose>
 				</configuration>
 
 				<executions>
@@ -106,7 +106,7 @@
 						<version>${aspectj.version}</version>
 					</dependency>
 				</dependencies>
-			</plugin> -->
+			</plugin> 
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

@@ -170,3 +170,27 @@ ORDER BY count desc;
 WHERE f.filename = 'mounts'
 AND d.path = '/proc/1882/task/1964'
 
+
+ALTER TABLE files
+ADD lastmodified DateTime
+
+SELECT 
+	d.path, 
+	d.id, 
+	f.filename, 
+	f.id, 
+	f.size, 
+	f.scandate, 
+	f.lastmodified,
+	f.sha1 
+FROM files f 
+INNER JOIN directories d 
+	ON d.id = f.dir_id 
+WHERE EXISTS ( 
+	SELECT ff.id 
+	FROM files ff 
+	INNER JOIN directories dd 
+		ON dd.id = ff.dir_id 
+	WHERE ff.sha1 = f.sha1 
+	AND ff.size <> f.size 
+)

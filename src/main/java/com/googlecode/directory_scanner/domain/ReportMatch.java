@@ -6,14 +6,14 @@ public class ReportMatch {
 
     private byte[] sha1;
     private long size;
-    private HashSet<String> paths;
+    private HashSet<StoredFile> store;
 //    private HashSet<Integer> fileIds;
 
     public ReportMatch(byte[] sha1, long size) {
 	this.sha1 = sha1;
 	// TO DO: rethink reporting
 	// this.fileIds = databaseHandler.getFileSha1s().get(sha1);
-	this.paths = new HashSet<>(2);
+	this.store = new HashSet<>(2);
 	this.size = size;
     }
 
@@ -25,14 +25,12 @@ public class ReportMatch {
 	return size;
     }
 
-    public HashSet<String> getPaths() {
-	if(paths == null)
-	    paths = new HashSet<>();
-	return paths;
+    public HashSet<StoredFile> getStore() {
+        return store;
     }
 
 
-    public enum Sort {
+    public static enum Sort {
 	NOSORT {
 	    @Override
 	    public String getSQL() {

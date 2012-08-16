@@ -1,10 +1,12 @@
 package com.googlecode.directory_scanner.contracts;
 
+import java.nio.file.attribute.FileTime;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.concurrent.BlockingQueue;
 
 import com.googlecode.directory_scanner.domain.ReportMatch;
+import com.googlecode.directory_scanner.domain.StoredFile;
 import com.googlecode.directory_scanner.domain.ReportMatch.Sort;
 
 public interface DatabaseWorker {
@@ -18,22 +20,21 @@ public interface DatabaseWorker {
      */
     public int insertDirectory(String path, Integer scanDir, boolean finished);
 
-    /**
-     * Only use this method if you either already have the id of the directory and only want to update it,
-     * or if you are certain that the directory does not exist jet in the database you can pass a null as @dirId
-     * @return dirId
-     */
-    public int insertDirectory(String path, Integer dirId, Integer scanDir, boolean finished);
-    
     public Integer getDirectoryId(String path, boolean createIfNotExists);
 
-    public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, long size, byte[] sha1);
+    public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1);
     
-    public Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, long size, byte[] sha1);
-
     public void insertFailure(String fullPath, int scanRoot, long size, long bytesRead, String failure);
 
     public void forgetDirectoryTree(String path);
 
     public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort);
+    
+    public BlockingQueue<ReportMatch> findSha1Collisions();
+
+    public BlockingQueue<String> findDirectoriesBelow(String path);
+
+    public StoredFile getFile(String dir, String fileName);
+
+    public void forgetFile(int dirId, String filename);
 }

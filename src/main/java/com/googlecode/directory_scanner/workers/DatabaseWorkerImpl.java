@@ -3,6 +3,7 @@
  */
 package com.googlecode.directory_scanner.workers;
 
+import java.nio.file.attribute.FileTime;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -23,6 +24,7 @@ import com.google.common.cache.LoadingCache;
 import com.googlecode.directory_scanner.contracts.DatabaseWorker;
 import com.googlecode.directory_scanner.domain.ReportMatch;
 import com.googlecode.directory_scanner.domain.ReportMatch.Sort;
+import com.googlecode.directory_scanner.domain.StoredFile;
 
 /**
  * @author kaefert
@@ -134,7 +136,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	try {
 	    Integer dirId = dirIdCache.get(path).orNull();
 	    if (dirId == null && createIfNotExists)
-		return insertDirectory(path, null, false);
+		return insertDirectory(path, null, null, false);
 	    return dirId;
 	} catch (ExecutionException e) {
 	    logger.error("failed to load DirId using DirIdCache", e);
@@ -144,25 +146,17 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
     @Override
     public int insertDirectory(String path, Integer scanDir, boolean finished) {
-	try {
-	    PreparedStatement stmt = db.getConnection().prepareStatement("SELECT id FROM directories WHERE path = ?");
-	    stmt.setString(1, path);
-	    ResultSet result = stmt.executeQuery();
-	    Integer dirId = null;
-	    if (result.next()) {
-		dirId = result.getInt(1);
-	    }
-	    stmt.close();
-	    return insertDirectory(path, dirId, scanDir, finished);
-
-	} catch (SQLException e) {
-	    db.createDirectoriesTable(e);
-	    return insertDirectory(path, scanDir, finished);
-	}
+	return insertDirectory(path, getDirectoryId(path, false), scanDir, finished);
     }
 
-    @Override
-    public int insertDirectory(String path, Integer dirId, Integer scanDir, boolean finished) {
+    /**
+     * Only use this method if you either already have the id of the directory
+     * and only want to update it, or if you are certain that the directory does
+     * not exist jet in the database you can pass a null as @dirId
+     * 
+     * @return dirId
+     */
+    private int insertDirectory(String path, Integer dirId, Integer scanDir, boolean finished) {
 	logger.info((dirId == null ? "inserting" : "updating") + (finished ? " finished " : " ") + "directory " + path);
 	try {
 	    if (dirId != null) {
@@ -218,12 +212,11 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
     }
 
     @Override
-    public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, long size, byte[] sha1) {
-	return insertFile(fullPath, fileName, getDirectoryId(containingDir, true), scanDir, size, sha1);
+    public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1) {
+	return insertFile(fullPath, fileName, getDirectoryId(containingDir, true), scanDir, lastModified, size, sha1);
     }
 
-    @Override
-    public Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, long size, byte[] sha1) {
+    private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1) {
 	try {
 	    PreparedStatement stmt = db.getConnection().prepareStatement("SELECT id FROM files WHERE dir_id = ? and filename = ?");
 	    stmt.setInt(1, containingDir);
@@ -234,21 +227,22 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		fileId = result.getInt(1);
 	    }
 	    stmt.close();
-	    return insertFile(fullPath, fileName, containingDir, scanDir, size, sha1, fileId);
+	    return insertFile(fullPath, fileName, containingDir, scanDir, lastModified, size, sha1, fileId);
 
 	} catch (SQLException e) {
 	    db.createFilesTable(e);
-	    return insertFile(fullPath, fileName, containingDir, scanDir, size, sha1);
+	    return insertFile(fullPath, fileName, containingDir, scanDir, lastModified, size, sha1);
 	}
     }
 
-    private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, long size, byte[] sha1, Integer fileId) {
+    private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1, Integer fileId) {
 
 	logger.info((fileId == null ? "inserting" : "updating") + "file; size=" + size + "; path=" + fullPath);
 
 	try {
 	    if (fileId != null) {
-		PreparedStatement stmt = db.getConnection().prepareStatement("UPDATE files SET scanDir_id = ?, size = ?, sha1 = ?, scandate = ? WHERE id = ?");
+		PreparedStatement stmt = db.getConnection().prepareStatement(
+		"UPDATE files SET scanDir_id = ?, size = ?, sha1 = ?, scandate = ?, lastmodified = ? WHERE id = ?");
 
 		stmt.setInt(1, scanDir);
 
@@ -256,22 +250,22 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		stmt.setBytes(3, sha1);
 
 		stmt.setTimestamp(4, new java.sql.Timestamp(new java.util.Date().getTime()));
-
-		stmt.setInt(5, fileId);
+		stmt.setTimestamp(5, new Timestamp(lastModified.toMillis()));
+		stmt.setInt(6, fileId);
 		stmt.execute();
 		stmt.close();
 	    } else {
 		PreparedStatement stmt = db.getConnection().prepareStatement(
-		"INSERT INTO files (dir_id, scanDir_id, filename, sha1, scandate, size) VALUES (?, ?, ?, ?, ?, ?)");
+		"INSERT INTO files (dir_id, scanDir_id, filename, sha1, scandate, lastmodified, size) VALUES (?, ?, ?, ?, ?, ?, ?)");
+
 		stmt.setInt(1, containingDir);
-
 		stmt.setInt(2, scanDir);
-
 		stmt.setString(3, fileName);
 		stmt.setBytes(4, sha1);
 		Timestamp timestamp = new Timestamp(new java.util.Date().getTime());
 		stmt.setTimestamp(5, timestamp);
-		stmt.setLong(6, size);
+		stmt.setTimestamp(6, new Timestamp(lastModified.toMillis()));
+		stmt.setLong(7, size);
 		stmt.execute();
 		stmt.close();
 
@@ -285,7 +279,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	} catch (SQLException e) {
 	    logger.warn("inserting file failed, will try to create table", e);
 	    db.createFilesTable(e);
-	    return insertFile(fullPath, fileName, containingDir, scanDir, size, sha1);
+	    return insertFile(fullPath, fileName, containingDir, scanDir, lastModified, size, sha1);
 	}
 	return fileId;
     }
@@ -326,6 +320,19 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	}
     }
 
+    @Override
+    public void forgetFile(int dirId, String filename) {
+	try {
+	    PreparedStatement stmt = db.getConnection().prepareStatement("DELETE FROM files WHERE dir_id = ? AND filename = ?");
+	    stmt.setInt(1, dirId);
+	    stmt.setString(2, filename);
+	    stmt.execute();
+	    stmt.close();
+	} catch (SQLException e) {
+	    logger.error("forgetDirectoryTree failed - SQLException", e);
+	}
+    }
+
     /**
      * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String,
      *      java.lang.String, boolean,
@@ -339,11 +346,10 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
 	final BlockingQueue<ReportMatch> queue = new ArrayBlockingQueue<>(10000);
 
-
 	new Thread(new Runnable() {
 	    @Override
 	    public void run() {
-	
+
 		try {
 
 		    String sql;
@@ -376,12 +382,13 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		    while (result.next()) {
 
 			String dirPath = result.getString(1);
-//			int dirId = result.getInt(2);
+			// int dirId = result.getInt(2);
 			String filename = result.getString(3);
-//			int fileId = result.getInt(4);
+			// int fileId = result.getInt(4);
 			long size = result.getLong(5);
-//			Date scandate = result.getDate(6);
+			Date scandate = result.getTimestamp(6);
 			byte[] sha1 = result.getBytes(7);
+			Date lastmodified = result.getTimestamp(8);
 
 			if (current == null || !Arrays.equals(current.getSha1(), sha1)) {
 			    if (current != null) {
@@ -394,31 +401,153 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 			    current = new ReportMatch(sha1, size);
 			}
 
-			current.getPaths().add(dirPath + "/" + filename);
-//			current.getFileIds().add(fileId);
+			current.getStore().add(new StoredFile(dirPath, filename, size, lastmodified, scandate));
+			// current.getFileIds().add(fileId);
 
 		    }
 		    stmt.close();
-		    
-		    
-			try {
-			    if (current != null)
-				queue.put(current);
-			    queue.put(ReportMatch.endOfQueue);
-			} catch (InterruptedException e) {
-			    logger.error("could not put ReportMatch into queue", e);
-			}
-		   
+
+		    try {
+			if (current != null)
+			    queue.put(current);
+			queue.put(ReportMatch.endOfQueue);
+		    } catch (InterruptedException e) {
+			logger.error("could not put ReportMatch.endOfQueue into queue", e);
+		    }
 
 		} catch (SQLException e) {
 		    logger.error("forgetDirectoryTree failed - SQLException", e);
 		}
-		
+
 	    }
 	}).start();
-	
-	
 
 	return queue;
+    }
+
+    @Override
+    public BlockingQueue<ReportMatch> findSha1Collisions() {
+
+	final BlockingQueue<ReportMatch> queue = new ArrayBlockingQueue<>(10000);
+
+	new Thread(new Runnable() {
+	    @Override
+	    public void run() {
+
+		try {
+
+		    PreparedStatement stmt = db.getConnection().prepareStatement(config.getProperty("sql_selectSha1Collisions"));
+
+		    ResultSet result = stmt.executeQuery();
+		    ReportMatch current = null;
+		    while (result.next()) {
+
+			String dirPath = result.getString(1);
+			// int dirId = result.getInt(2);
+			String filename = result.getString(3);
+			// int fileId = result.getInt(4);
+			long size = result.getLong(5);
+			Date scandate = result.getTimestamp(6);
+			byte[] sha1 = result.getBytes(7);
+			Date lastmodified = result.getTimestamp(8);
+
+			if (current != null) {
+			    try {
+				queue.put(current);
+			    } catch (InterruptedException e) {
+				logger.error("could not put ReportMatch into queue", e);
+			    }
+			}
+			current = new ReportMatch(sha1, size);
+
+			current.getStore().add(new StoredFile(dirPath, filename, size, lastmodified, scandate));
+			// current.getPaths().add(dirPath + "/" + filename);
+			// current.getFileIds().add(fileId);
+
+		    }
+		    stmt.close();
+
+		    try {
+			if (current != null)
+			    queue.put(current);
+			queue.put(ReportMatch.endOfQueue);
+		    } catch (InterruptedException e) {
+			logger.error("could not put ReportMatch into queue", e);
+		    }
+
+		} catch (SQLException e) {
+		    logger.error("forgetDirectoryTree failed - SQLException", e);
+		}
+
+	    }
+	}).start();
+
+	return queue;
+    }
+
+    @Override
+    public BlockingQueue<String> findDirectoriesBelow(final String path) {
+	final BlockingQueue<String> queue = new ArrayBlockingQueue<>(10000);
+
+	new Thread(new Runnable() {
+	    @Override
+	    public void run() {
+
+		try {
+
+		    PreparedStatement stmt = db.getConnection().prepareStatement("SELECT path FROM directories WHERE path LIKE ?");
+		    stmt.setString(1, path + '%');
+		    ResultSet result = stmt.executeQuery();
+
+		    try {
+			while (result.next()) {
+			    queue.put(result.getString(1));
+			}
+			queue.put(config.getProperty("EndOfStringQueue"));
+		    } catch (InterruptedException e) {
+			logger.error("could not put String into queue", e);
+		    } finally {
+			stmt.close();
+		    }
+
+		} catch (SQLException e) {
+		    logger.error("forgetDirectoryTree failed - SQLException", e);
+		}
+
+	    }
+	}).start();
+
+	return queue;
+    }
+
+    @Override
+    public StoredFile getFile(String dir, String fileName) {
+	Integer dirId = getDirectoryId(dir, false);
+	if (dirId == null)
+	    return null;
+
+	try {
+	    PreparedStatement stmt = db.getConnection().prepareStatement(config.getProperty("sql_selectFileDetails"));
+	    stmt.setString(1, dir);
+	    stmt.setString(2, fileName);
+	    ResultSet result = stmt.executeQuery();
+
+	    StoredFile storedFile = null;
+	    if (result.next()) {
+		storedFile = new StoredFile(dir, fileName, result.getLong(1), result.getTimestamp(2), result.getTimestamp(3));
+	    }
+	    stmt.close();
+	    return storedFile;
+
+	    // if(id != null)
+	    // return Optional.fromNullable(id);
+	    // return id;
+
+	} catch (SQLException e) {
+	    logger.warn("selecting directories failed, will try to create table", e);
+	    db.createDirectoriesTable(e);
+	    db.createFilesTable(e);
+	    return getFile(dir, fileName);
+	}
     }
 }

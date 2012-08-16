@@ -8,6 +8,7 @@ import java.util.concurrent.BlockingQueue;
 import org.apache.log4j.Logger;
 
 import com.googlecode.directory_scanner.contracts.DatabaseWorker;
+import com.googlecode.directory_scanner.contracts.SkipDecider;
 import com.googlecode.directory_scanner.domain.PathVisit;
 import com.googlecode.directory_scanner.domain.PathVisit.Type;
 import com.googlecode.directory_scanner.workers.ChecksumSHA1Calculator.Sha1WithSize;
@@ -17,11 +18,13 @@ public class PathVisitProcessor {
     private BlockingQueue<PathVisit> queue, dbInsertQueue;
     private DatabaseWorker db;
     private Logger logger;
+    private SkipDecider skipDecider;
 
-    public PathVisitProcessor(BlockingQueue<PathVisit> queue, Logger logger, DatabaseWorker db) {
+    public PathVisitProcessor(BlockingQueue<PathVisit> queue, Logger logger, DatabaseWorker db, SkipDecider skipDecider) {
 	this.queue = queue;
 	this.logger = logger;
 	this.db = db;
+	this.skipDecider = skipDecider;
 
 	dbInsertQueue = new ArrayBlockingQueue<>(10000);
 
@@ -31,7 +34,6 @@ public class PathVisitProcessor {
 		process();
 	    }
 	}).start();
-	
 
 	new Thread(new Runnable() {
 	    @Override
@@ -46,7 +48,7 @@ public class PathVisitProcessor {
 	    try {
 		PathVisit pathVisit = queue.take();
 		handlePathVisit(pathVisit);
-		
+
 		if (pathVisit == PathVisit.endOfQueue)
 		    break;
 
@@ -58,32 +60,37 @@ public class PathVisitProcessor {
 
     private void handlePathVisit(PathVisit pathVisit) {
 
+	boolean doDbInsertion = true;
+
 	if (pathVisit.getType() == Type.FILE) {
 
-	    try {
+	    if (skipDecider != null && skipDecider.decideFileSkip(pathVisit.getPath(), pathVisit.getAttributes())) {
+		doDbInsertion = false;
+	    } else {
+		try {
+		    // although this is a long running action, we will not fork
+		    // a thread for it, because:
+		    // 1.) it is not healthy for disks to read multiple files at
+		    //     ones.
+		    // 2.) we do not want to insert directories as finished
+		    //     before files within it
+		    //     - the order of the queue must be kept
 
-		// although this is a long running action, we will not fork a
-		// thread for it, because:
-		// 1.) it is not healthy for disks to read multiple files at
-		// ones.
-		// 2.) we do not want to insert directories as finished before
-		// files within it
-		// - the order of the queue must be kept
+		    Sha1WithSize sha1WithSize = ChecksumSHA1Calculator.getSHA1Checksum(pathVisit.getPath());
+		    pathVisit.fileScanned(sha1WithSize.getBytesRead(), sha1WithSize.getSha1());
 
-		Sha1WithSize sha1WithSize = ChecksumSHA1Calculator.getSHA1Checksum(pathVisit.getPath());
-		pathVisit.fileScanned(sha1WithSize.getBytesRead(), sha1WithSize.getSha1());
-
-	    } catch (NoSuchAlgorithmException | IOException e) {
-		logger.warn("could not calculate sha1 for file: " + pathVisit.getPath());
+		} catch (NoSuchAlgorithmException | IOException e) {
+		    logger.warn("could not calculate sha1 for file: " + pathVisit.getPath());
+		}
 	    }
-
 	}
 
-	try {
-	    dbInsertQueue.put(pathVisit);
-	} catch (InterruptedException e) {
-	    logger.error("Interupted while inserting into dbInsertQueue", e);
-	}
+	if (doDbInsertion)
+	    try {
+		dbInsertQueue.put(pathVisit);
+	    } catch (InterruptedException e) {
+		logger.error("Interupted while inserting into dbInsertQueue", e);
+	    }
     }
 
     private void processDbQueue() {
@@ -114,7 +121,7 @@ public class PathVisitProcessor {
 		// sanity check succeeded, insert using the supplied data
 		String fileName = pathVisit.getPath().getFileName().toString();
 		String directory = pathVisit.getPath().getParent().toString();
-		db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), pathVisit.getSize(), pathVisit.getSha1());
+		db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), pathVisit.getLastModified(), pathVisit.getSize(), pathVisit.getSha1());
 	    } else {
 		// sanity check failed. insert file as FAILURE
 		db.insertFailure(fullPath, pathVisit.getScanRoot(), pathVisit.getSize(), pathVisit.getBytesRead(), "different sizes!");

@@ -351,7 +351,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	    public void run() {
 
 		try {
-
+		    createIndexes();
 		    String sql;
 		    if (duplicates) {
 			if (path2 == null)
@@ -435,7 +435,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	    public void run() {
 
 		try {
-
+		    createIndexes();
 		    PreparedStatement stmt = db.getConnection().prepareStatement(config.getProperty("sql_selectSha1Collisions"));
 
 		    ResultSet result = stmt.executeQuery();
@@ -494,7 +494,6 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	    public void run() {
 
 		try {
-
 		    PreparedStatement stmt = db.getConnection().prepareStatement("SELECT path FROM directories WHERE path LIKE ?");
 		    stmt.setString(1, path + '%');
 		    ResultSet result = stmt.executeQuery();
@@ -511,7 +510,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		    }
 
 		} catch (SQLException e) {
-		    logger.error("forgetDirectoryTree failed - SQLException", e);
+		    logger.error("findDirectoriesBelow failed - SQLException", e);
 		}
 
 	    }
@@ -548,6 +547,37 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	    db.createDirectoriesTable(e);
 	    db.createFilesTable(e);
 	    return getFile(dir, fileName);
+	}
+    }
+
+    private void createIndexes() {
+	if ("1".equals(config.getProperty("createIndexes"))) {
+	    try {
+		PreparedStatement stmt = db.getConnection().prepareStatement("SHOW INDEX FROM files");
+		ResultSet result = stmt.executeQuery();
+		boolean sizeIndexExists = false, sha1IndexExists = false;
+		while (result.next()) {
+		    String column = result.getString("Column_name");
+		    String table = result.getString("Table");
+		    if ("files".equals(table) && "size".equals(column))
+			sizeIndexExists = true;
+		    else if ("files".equals(table) && "sha1".equals(column))
+			sha1IndexExists = true;
+		}
+		stmt.close();
+		if (!sha1IndexExists) {
+		    stmt = db.getConnection().prepareStatement("CREATE INDEX files_sha1 ON files (sha1)");
+		    stmt.execute();
+		    stmt.close();
+		}
+		if (!sizeIndexExists) {
+		    stmt = db.getConnection().prepareStatement("CREATE INDEX files_size ON files (size)");
+		    stmt.execute();
+		    stmt.close();
+		}
+	    } catch (SQLException e) {
+		logger.error("problem while creating indexes");
+	    }
 	}
     }
 }

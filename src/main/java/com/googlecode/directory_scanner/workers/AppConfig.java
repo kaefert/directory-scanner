@@ -20,6 +20,9 @@ public class AppConfig extends Properties {
     private static final long serialVersionUID = 2402741572495774673L;
 
     public static String getSha1HexString(byte[] sha1) {
+	if(sha1==null)
+	    return "NULL";
+	
 	String result = "";
 	for (int i = 0; i < sha1.length; i++) {
 	    result += Integer.toString((sha1[i] & 0xff) + 0x100, 16).substring(1);

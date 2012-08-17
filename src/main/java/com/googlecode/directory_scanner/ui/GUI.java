@@ -670,7 +670,7 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findFiles(txtPath2.getText(), txtPath1.getText(), false, getReportSortMode()));
+			doReport(worker.findSha1Collisions());
 		    }
 		}).start();
 	    }

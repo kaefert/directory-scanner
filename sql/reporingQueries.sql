@@ -1,4 +1,3 @@
-
 /**************************************************/
 /************ sql_selectFilesBelowPath ************/
 /**************************************************/
@@ -152,8 +151,6 @@ INNER JOIN directories d
 WHERE EXISTS ( /* same sha1 but different size */ 
 	SELECT ff.id 
 	FROM files ff 
-	INNER JOIN directories dd 
-		ON dd.id = ff.dir_id 
 	WHERE ff.sha1 = f.sha1 
 	AND ff.size <> f.size 
 ) 

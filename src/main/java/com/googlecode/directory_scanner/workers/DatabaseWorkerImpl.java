@@ -367,6 +367,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 			    sql = config.getProperty("sql_selectFilesBelowPath1NotBelowPath2");
 		    }
 
+		    logger.info("Starting findFiles Select Query");
 		    PreparedStatement stmt = db.getConnection().prepareStatement(sql + sort.getSQL());
 		    stmt.setString(1, path1 + "%");
 
@@ -378,6 +379,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		    }
 
 		    ResultSet result = stmt.executeQuery();
+		    logger.info("finished findFiles Select Query - starting to iterate result set");
 		    ReportMatch current = null;
 		    while (result.next()) {
 
@@ -414,6 +416,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		    } catch (InterruptedException e) {
 			logger.error("could not put ReportMatch.endOfQueue into queue", e);
 		    }
+		    logger.info("finished findFiles iterating result set");
 
 		} catch (SQLException e) {
 		    logger.error("forgetDirectoryTree failed - SQLException", e);
@@ -436,9 +439,11 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
 		try {
 		    createIndexes();
+		    logger.info("starting findSha1Collisions executing query");
 		    PreparedStatement stmt = db.getConnection().prepareStatement(config.getProperty("sql_selectSha1Collisions"));
 
 		    ResultSet result = stmt.executeQuery();
+		    logger.info("finished findSha1Collisions executing query, start itterating");
 		    ReportMatch current = null;
 		    while (result.next()) {
 
@@ -474,6 +479,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		    } catch (InterruptedException e) {
 			logger.error("could not put ReportMatch into queue", e);
 		    }
+		    logger.info("finished findSha1Collisions itterating");
 
 		} catch (SQLException e) {
 		    logger.error("forgetDirectoryTree failed - SQLException", e);

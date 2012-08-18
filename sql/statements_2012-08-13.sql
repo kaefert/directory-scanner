@@ -30,11 +30,8 @@ WHERE ( /* at least given number of those duplicates are within the given path *
 ) >= 2
 order by f.size DESC, f.sha1
 
-CREATE INDEX files_sha1
-ON files (sha1);
-
-CREATE INDEX files_size
-ON files (size);
+CREATE INDEX files_sha1 ON files (sha1);
+CREATE INDEX files_size ON files (size);
 
 select 1 from dbo.sysindexes where object_name(id)='files' and indid between 2 and 254
 
@@ -55,9 +52,36 @@ INNER JOIN directories d
 WHERE d.path = ? 
   AND f.filename = ? 
 ORDER BY f.sha1
+/*************************************************/
 
+EXPLAIN EXTENDED
+SELECT 
+	f.dir_id,
+	f.filename, 
+	f.id, 
+	f.size, 
+	f.scandate, 
+	f.sha1, 
+	f.lastmodified 
+FROM files f 
+WHERE EXISTS ( /* same sha1 but different size */ 
+	SELECT ff.id 
+	FROM files ff
+	WHERE ff.sha1 = f.sha1 
+	AND ff.size <> f.size 
+) 
+OR EXISTS ( /* files with same name and path but different id */ 
+	SELECT ff2.id 
+	FROM files ff2 
+	INNER JOIN directories dd2 
+		ON dd2.id = ff2.dir_id 
+	WHERE ff2.id <> f.id 
+	AND ff2.filename = f.filename 
+	AND dd2.path = d.path 
+) 
+ORDER BY f.sha1
 
-
+/*************************************************/
 
 EXPLAIN
 SELECT 
@@ -86,3 +110,8 @@ OR EXISTS ( /* files with same name and path but different id */
 	AND dd2.path = d.path 
 ) 
 ORDER BY f.sha1
+
+SELECT COUNT(f.id) FROM files f
+INNER JOIN directories d 
+	ON d.id = f.dir_id
+WHERE d.path LIKE '/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49%'

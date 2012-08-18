@@ -14,6 +14,8 @@ public aspect Aspect {
     Logger logger = Logger.getLogger("directory-scanner-gui-logger_" + this.hashCode());
     
     pointcut publicOperation() : execution(* com.googlecode.directory_scanner.*.*(..))
+    || execution(* com.googlecode.directory_scanner.workers.WorkManagerImpl.*(..))
+    || execution(* com.googlecode.directory_scanner.ui.GUI.doReport(..))
 //    || execution(* com.googlecode.directory_scanner.workers.*.*(..))
     ;
 

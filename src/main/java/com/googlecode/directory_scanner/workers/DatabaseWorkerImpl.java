@@ -11,6 +11,7 @@ import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
@@ -237,7 +238,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
     private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1, Integer fileId) {
 
-	logger.info((fileId == null ? "inserting" : "updating") + "file; size=" + size + "; path=" + fullPath);
+	logger.info((fileId == null ? "inserting" : "updating") + " file; size=" + size + "; path=" + fullPath);
 
 	try {
 	    if (fileId != null) {
@@ -429,7 +430,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
     }
 
     @Override
-    public BlockingQueue<ReportMatch> findSha1Collisions() {
+    public BlockingQueue<ReportMatch> findProblems() {
 
 	final BlockingQueue<ReportMatch> queue = new ArrayBlockingQueue<>(config.getQueueLength());
 
@@ -438,53 +439,85 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	    public void run() {
 
 		try {
-		    createIndexes();
-		    logger.info("starting findSha1Collisions executing query");
-		    PreparedStatement stmt = db.getConnection().prepareStatement(config.getProperty("sql_selectSha1Collisions"));
+		    logger.debug("creating index sha1_size");
+		    tryExecute("CREATE INDEX sha1_size ON files (sha1, size)");
 
-		    ResultSet result = stmt.executeQuery();
-		    logger.info("finished findSha1Collisions executing query, start itterating");
-		    ReportMatch current = null;
-		    while (result.next()) {
-
-			String dirPath = result.getString(1);
-			// int dirId = result.getInt(2);
-			String filename = result.getString(3);
-			// int fileId = result.getInt(4);
-			long size = result.getLong(5);
-			Date scandate = result.getTimestamp(6);
-			byte[] sha1 = result.getBytes(7);
-			Date lastmodified = result.getTimestamp(8);
-
-			if (current != null) {
-			    try {
-				queue.put(current);
-			    } catch (InterruptedException e) {
-				logger.error("could not put ReportMatch into queue", e);
-			    }
+		    logger.debug("finished creating index, starting findSha1Collisions");
+		    PreparedStatement s1cPS = db.getConnection().prepareStatement(config.getProperty("sql_selectSha1Collisions"));
+		    ResultSet s1cRS = s1cPS.executeQuery();
+		    while (s1cRS.next()) {
+			byte[] sha1 = s1cRS.getBytes(1);
+			PreparedStatement s1dPS = db.getConnection().prepareStatement(config.getProperty("sql_selectSha1Details"));
+			s1dPS.setBytes(1, sha1);
+			ResultSet s1dRS = s1dPS.executeQuery();
+			ReportMatch rm = new ReportMatch(sha1, -1);
+			rm.setMetadata("SHA1 Collision! sha1=" + AppConfig.getSha1HexString(sha1));
+			while (s1dRS.next()) {
+			    rm.getStore().add(
+			    new StoredFile(s1dRS.getString("path"), s1dRS.getString("filename"), s1dRS.getLong("size"), s1dRS.getTimestamp("lastmodified"),
+			    s1dRS.getTimestamp("scandate")));
 			}
-			current = new ReportMatch(sha1, size);
-
-			current.getStore().add(new StoredFile(dirPath, filename, size, lastmodified, scandate));
-			// current.getPaths().add(dirPath + "/" + filename);
-			// current.getFileIds().add(fileId);
-
+			s1dPS.close();
+			queue.put(rm);
 		    }
-		    stmt.close();
+		    s1cPS.close();
+		    logger
+		    .debug("finished itterating sha1Collisions and loading details for them. starting to check for directories that have been inserted multiple times");
+
+		    PreparedStatement ddPS = db.getConnection().prepareStatement(config.getProperty("sql_selectDirectoryDuplicates"));
+		    ResultSet ddRS = ddPS.executeQuery();
+		    logger.debug("finished query selectDirectoryDuplicates, start iterating");
+		    while (ddRS.next()) {
+			ReportMatch rm = new ReportMatch(null, -1);
+			rm.setMetadata("duplicate directories");
+			rm.getStore().add(new StoredFile(ddRS.getString(1), "", -1, null, null));
+			queue.put(rm);
+		    }
+		    logger.debug("finished iterating DirectoryDuplicates, will now try to create unique constraint ON files (filename, dir_id)");
+		    ddPS.close();
+
+		    PreparedStatement dfPS = db.getConnection().prepareStatement("CREATE UNIQUE INDEX filename_dir ON files (filename, dir_id);");
 
 		    try {
-			if (current != null)
-			    queue.put(current);
-			queue.put(ReportMatch.endOfQueue);
-		    } catch (InterruptedException e) {
-			logger.error("could not put ReportMatch into queue", e);
+			dfPS.execute();
+		    } catch (SQLException e) {
+			if (e.getMessage().contains("Duplicate key name") || e.getMessage().contains("already exists")) {
+			    logger.info("unique constraint ON files (filename, dir_id) already exists, therefore this problem cannot exist; SQLException="
+			    + e.getMessage());
+			} else {
+			    logger.warn("could not create unique index, exception = " + e.getMessage() + " (starting sql_selectWrongFileDuplicates)");
+
+			    ReportMatch rm = new ReportMatch(null, -1);
+			    rm.setMetadata("files that have the same dir_id & filename exist!");
+			    rm.getStore().add(new StoredFile(e.getMessage(), "", -1, null, null));
+			    queue.put(rm);
+
+			    PreparedStatement dfdPS = db.getConnection().prepareStatement(config.getProperty("sql_selectWrongFileDuplicates"));
+			    ResultSet dfdRS = dfdPS.executeQuery();
+			    logger.debug("finished sql_selectWrongFileDuplicates executeQuery, start iterating resultset");
+			    while (dfdRS.next()) {
+				int dirId = dfdRS.getInt("dir_id");
+				String filename = dfdRS.getString("filename");
+				int fileId = dfdRS.getInt("id");
+				ReportMatch rm2 = new ReportMatch(null, -1);
+				rm2.setMetadata("WrongFileDuplicate, dirid=" + dirId + ", filename=" + filename + ", file_id=" + fileId);
+				queue.put(rm2);
+			    }
+			    logger.debug("finished iterating resultset of sql_selectWrongFileDuplicates");
+
+			}
+		    } finally {
+			dfPS.close();
 		    }
-		    logger.info("finished findSha1Collisions itterating");
+
+		    queue.put(ReportMatch.endOfQueue);
+		    logger.info("finished DatabaseWorkerImpl.findProblems(..)");
 
 		} catch (SQLException e) {
-		    logger.error("forgetDirectoryTree failed - SQLException", e);
+		    logger.error("findProblems failed unexpectedly - SQLException", e);
+		} catch (InterruptedException e) {
+		    logger.error("interrupted while putting reportmatch into queue!");
 		}
-
 	    }
 	}).start();
 
@@ -556,34 +589,106 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	}
     }
 
-    private void createIndexes() {
-	if ("1".equals(config.getProperty("createIndexes"))) {
-	    try {
-		PreparedStatement stmt = db.getConnection().prepareStatement("SHOW INDEX FROM files");
-		ResultSet result = stmt.executeQuery();
-		boolean sizeIndexExists = false, sha1IndexExists = false;
-		while (result.next()) {
-		    String column = result.getString("Column_name");
-		    String table = result.getString("Table");
-		    if ("files".equals(table) && "size".equals(column))
-			sizeIndexExists = true;
-		    else if ("files".equals(table) && "sha1".equals(column))
-			sha1IndexExists = true;
-		}
-		stmt.close();
-		if (!sha1IndexExists) {
-		    stmt = db.getConnection().prepareStatement("CREATE INDEX files_sha1 ON files (sha1)");
-		    stmt.execute();
-		    stmt.close();
-		}
-		if (!sizeIndexExists) {
-		    stmt = db.getConnection().prepareStatement("CREATE INDEX files_size ON files (size)");
-		    stmt.execute();
-		    stmt.close();
-		}
-	    } catch (SQLException e) {
-		logger.error("problem while creating indexes");
+    private Set<String> getIndexNames() {
+
+	HashSet<String> returnVal = new HashSet<>();
+	String sql = db.isUsingFallback() ? "SELECT * FROM information_schema.indexes WHERE table_name='FILES'" : "SHOW INDEX FROM files";
+	try {
+	    PreparedStatement stmt = db.getConnection().prepareStatement(sql);
+	    ResultSet result = stmt.executeQuery();
+	    while (result.next()) {
+		String indexName = result.getString(db.isUsingFallback() ? "INDEX_NAME" : "Key_name");
+		returnVal.add(indexName);
 	    }
+	} catch (SQLException e) {
+	    logger.error("could not load index names", e);
+	}
+
+	return returnVal;
+    }
+
+    private void createIndexes() {
+	try {
+	    Set<String> existingIndexes = getIndexNames();
+	    boolean sha1IndexExists = false, sizeIndexExists = false;
+	    for (String index : existingIndexes) {
+		if ("size".equals(index))
+		    sizeIndexExists = true;
+		else if ("sha1".equals(index))
+		    sha1IndexExists = true;
+	    }
+	    if (!sha1IndexExists) {
+		PreparedStatement stmt = db.getConnection().prepareStatement("CREATE INDEX files_sha1 ON files (sha1)");
+		stmt.execute();
+		stmt.close();
+	    }
+	    if (!sizeIndexExists) {
+		PreparedStatement stmt = db.getConnection().prepareStatement("CREATE INDEX files_size ON files (size)");
+		stmt.execute();
+		stmt.close();
+	    }
+	} catch (SQLException e) {
+	    logger.error("problem while creating indexes");
+	}
+    }
+
+    @Override
+    public void dropIndexes() {
+
+	if (!db.isUsingFallback())
+	    tryExecute("CREATE INDEX dir_id ON files (dir_id)");
+
+	Set<String> existingIndexes = getIndexNames();
+	HashSet<String> dropped = new HashSet<>();
+
+	for (String indexName : existingIndexes) {
+	    if (!dropped.contains(indexName)) {
+		if (db.isUsingFallback()) {
+		    if (!(indexName.contains("CONSTRAINT_INDEX") || indexName.equals("PRIMARY_KEY"))) {
+			dropSingleIndex(indexName);
+			dropped.add(indexName);
+		    }
+		} else {
+		    if (!("PRIMARY".equals(indexName) || "dir_id".equals(indexName) || "scanDir_id".equals(indexName))) {
+			dropSingleIndex(indexName);
+			dropped.add(indexName);
+		    }
+		}
+	    }
+	}
+    }
+
+    private boolean dropSingleIndex(String indexName) {
+	try {
+	    PreparedStatement stmt;
+	    if (db.isUsingFallback()) {
+		stmt = db.getConnection().prepareStatement("DROP INDEX " + indexName);
+	    } else {
+		stmt = db.getConnection().prepareStatement("DROP INDEX ? ON files");
+		stmt.setString(1, indexName);
+	    }
+	    return tryExecute(stmt);
+	} catch (SQLException e) {
+	    logger.warn("could not drop index " + indexName, e);
+	    return false;
+	}
+    }
+
+    private boolean tryExecute(String sql) {
+	try {
+	    return tryExecute(db.getConnection().prepareStatement(sql));
+	} catch (SQLException e) {
+	    logger.warn("could not create stmt with sql: " + sql);
+	    return false;
+	}
+    }
+
+    private boolean tryExecute(PreparedStatement stmt) {
+	try {
+	    return stmt.execute();
+	} catch (SQLException e) {
+	    logger.warn("could not execute stmt: " + stmt.toString().substring(db.isUsingFallback() ? 7 : 48) + " ; SQLException=" + e.getMessage());
+	    return false;
 	}
     }
 }

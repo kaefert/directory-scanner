@@ -16,6 +16,10 @@ public class DatabaseConnectionHandler {
     private Logger logger;
     private Properties appConfig;
     private boolean useFallback = false;
+    
+    public boolean isUsingFallback() {
+	return useFallback;
+    }
 
     public DatabaseConnectionHandler(Logger logger, Properties config) {
 	this.logger = logger;

@@ -52,6 +52,6 @@ public interface WorkManager {
      */
     public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, ReportMatch.Sort sort);
     
-    public BlockingQueue<ReportMatch> findSha1Collisions();
+    public BlockingQueue<ReportMatch> findProblems();
 
 }

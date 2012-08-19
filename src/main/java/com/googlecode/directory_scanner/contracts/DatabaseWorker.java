@@ -30,11 +30,13 @@ public interface DatabaseWorker {
 
     public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort);
     
-    public BlockingQueue<ReportMatch> findSha1Collisions();
+    public BlockingQueue<ReportMatch> findProblems();
 
     public BlockingQueue<String> findDirectoriesBelow(String path);
 
     public StoredFile getFile(String dir, String fileName);
 
     public void forgetFile(int dirId, String filename);
+
+    public void dropIndexes();
 }

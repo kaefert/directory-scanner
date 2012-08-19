@@ -57,7 +57,7 @@ public class GUI {
 
     private JRadioButtonMenuItem sortNot, sortSize, sortCount, sortSizeCount, reportAll, reportPath1, report1stPath1, reportNotPath1, reportAllBut1stPath1,
     reportPath2, report1stPath2, reportNotPath2, reportAllBut1stPath2;
-    private JCheckBoxMenuItem reportSha1andSize;
+    private JCheckBoxMenuItem reportMetadata;
 
     private JCheckBox chckbxAutoscroll;
     private JTabbedPane tabPane;
@@ -662,7 +662,7 @@ public class GUI {
 		}).start();
 	    }
 	});
-	reportMenu.add(new AbstractAction("sha1 Collisions") {
+	reportMenu.add(new AbstractAction("sha1 Collisions & other problems") {
 	    private static final long serialVersionUID = -2431148865166087752L;
 
 	    @Override
@@ -670,7 +670,8 @@ public class GUI {
 		new Thread(new Runnable() {
 		    @Override
 		    public void run() {
-			doReport(worker.findSha1Collisions());
+			reportMetadata.setSelected(true);
+			doReport(worker.findProblems());
 		    }
 		}).start();
 	    }
@@ -697,8 +698,8 @@ public class GUI {
 
 	reportMenu.addSeparator();
 
-	reportSha1andSize = new JCheckBoxMenuItem("report sha1 & size", true);
-	reportMenu.add(reportSha1andSize);
+	reportMetadata = new JCheckBoxMenuItem("report match metadata", true);
+	reportMenu.add(reportMetadata);
 
 	reportMenu.addSeparator();
 
@@ -782,8 +783,9 @@ public class GUI {
     }
 
     private void reportSingleMatch(ReportMatch match) {
-	if (reportSha1andSize.isSelected()) {
-	    txtrFileList.append("\nMatch sha1=" + AppConfig.getSha1HexString(match.getSha1()) + "; size=" + match.getSize() + "; count=" + match.getStore().size() + "; totalSize=" + match.getSize()*match.getStore().size() + "\n");
+	if (reportMetadata.isSelected()) {
+	    txtrFileList.append("\n" + match.getMetadata() + "\n"); 
+//	    Match sha1=" + AppConfig.getSha1HexString(match.getSha1()) + "; size=" + match.getSize() + "; count=" + match.getStore().size() + "; totalSize=" + match.getSize()*match.getStore().size() + "\n");
 	}
 	if (reportAll.isSelected()) {
 	    for(StoredFile file : match.getStore()) {

@@ -50,6 +50,9 @@ public class WorkManagerImpl implements WorkManager {
     @Override
     public void scanPath(String path) {
 
+	if("1".equals(config.getProperty("dropIndexesBeforeScan")))
+	    db.dropIndexes();
+	
 	final ArrayBlockingQueue<PathVisit> queue = new ArrayBlockingQueue<>(1000, false);
 	final String pathString = path.toString();
 
@@ -189,8 +192,8 @@ public class WorkManagerImpl implements WorkManager {
     }
 
     @Override
-    public BlockingQueue<ReportMatch> findSha1Collisions() {
-	return db.findSha1Collisions();
+    public BlockingQueue<ReportMatch> findProblems() {
+	return db.findProblems();
     }
 
 }

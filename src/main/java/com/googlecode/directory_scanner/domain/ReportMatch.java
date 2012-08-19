@@ -2,11 +2,14 @@ package com.googlecode.directory_scanner.domain;
 
 import java.util.HashSet;
 
+import com.googlecode.directory_scanner.workers.AppConfig;
+
 public class ReportMatch {
 
     private byte[] sha1;
     private long size;
     private HashSet<StoredFile> store;
+    private String metaData;
 //    private HashSet<Integer> fileIds;
 
     public ReportMatch(byte[] sha1, long size) {
@@ -28,7 +31,17 @@ public class ReportMatch {
     public HashSet<StoredFile> getStore() {
         return store;
     }
+    
+    public void setMetadata(String metadata) {
+	this.metaData = metadata;
+    }
 
+    public String getMetadata() {
+	if(metaData != null)
+	    return metaData;
+	else
+	    return "Match sha1=" + AppConfig.getSha1HexString(getSha1()) + "; size=" + getSize() + "; count=" + getStore().size() + "; totalSize=" + getSize()*getStore().size();
+    }
 
     public static enum Sort {
 	NOSORT {

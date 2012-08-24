@@ -36,8 +36,12 @@ public class DatabaseConnectionHandler {
 	if (connections == null) {
 	    connections = new HashMap<String, Connection>();
 	}
+	
 	if(useFallback)
 	    return connections.get("");
+	
+	if("1".equals(appConfig.getProperty("dbFallBackUseAsDefault")))
+		return getFallbackDatabase();
 	
 	if (connections.get(databaseName) == null) {
 
@@ -73,6 +77,9 @@ public class DatabaseConnectionHandler {
 	    appConfig.getProperty("dbFallBackPassword"));
 	    connections.put("", connection);
 	    useFallback = true;
+	    createDirectoriesTable(null);
+	    createFilesTable(null);
+	    createFailuresTable(null);
 	    return connection;
 
 	} catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {

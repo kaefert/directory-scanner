@@ -23,6 +23,7 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
     private Integer scanPathId;
     private BlockingQueue<PathVisit> outputQueue;
     private BlockingQueue<ScanJob> inputQueue;
+    private boolean working = true;
 
     private SkipDirectoryDecider skipDecider;
 
@@ -45,7 +46,9 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 
 		while (true) {
 		    try {
+			working = false;
 			ScanJob scanJob = inputQueue.take();
+			working = true;
 
 			if (ScanJob.endOfQueue.equals(scanJob))
 			    break;
@@ -165,5 +168,9 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 	}
 	// worker.visitFileFailed(file, exc);
 	return FileVisitResult.CONTINUE;
+    }
+
+    public boolean isWorking() {
+	return working;
     }
 }

@@ -5,6 +5,7 @@ package com.googlecode.directory_scanner.workers;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -43,16 +44,17 @@ public class WorkManagerImpl implements WorkManager {
     private DirectoryTreeWalker walker = null;
     private BlockingQueue<PathVisit> walkerOutputQueue = null;
     private BlockingQueue<ScanJob> walkerInputQueue = null;
-    
+    private PathVisitProcessor visitProcessor = null;
+
     private BlockingQueue<PathVisit> getWalkerOutputQueue() {
 	if (walkerOutputQueue == null) {
 	    walkerOutputQueue = new ArrayBlockingQueue<>(config.getQueueLength());
 	    SkipFileDecider decider = null;
-	    
-	    if("1".equals(config.getProperty("doneFiles")))
+
+	    if ("1".equals(config.getProperty("doneFiles")))
 		decider = new SkipFileDeciderImpl(logger, db);
-	    
-	    new PathVisitProcessor(walkerOutputQueue, logger, db, decider, config);
+
+	    visitProcessor = new PathVisitProcessor(walkerOutputQueue, logger, db, decider, config);
 	}
 	return walkerOutputQueue;
     }
@@ -88,18 +90,18 @@ public class WorkManagerImpl implements WorkManager {
     public String getProfileStats() {
 	return db.getProfileStats();
     }
-    
+
     @Override
     public void setProfile(String name) {
 	config.addProfile(name);
-        db.setProfile(name);
+	db.setProfile(name);
     }
-    
+
     @Override
     public List<String> getProfileList() {
-        return config.getProfileList();
+	return config.getProfileList();
     }
-    
+
     /**
      * @see com.googlecode.directory_scanner.contracts.WorkManager#scanPath(java.lang.String)
      */
@@ -110,12 +112,12 @@ public class WorkManagerImpl implements WorkManager {
 	    db.indexesInsertingMode();
 
 	db.forgetFailuresBelow(path);
-	
+
 	Date after = config.getSkipDirectoriesDoneAfter();
 	int cacheDoneDirectories = Integer.parseInt(config.getProperty("cacheDoneDirectories"));
 	SkipDirectoryDecider skipDecider = new SkipDirectoryDeciderImpl(path, after, cacheDoneDirectories, db, logger);
 	Integer scanDirId = db.getDirectoryId(path, true);
-	
+
 	try {
 	    getWalkerInputQueue().put(new ScanJob(path, scanDirId, skipDecider));
 	} catch (InterruptedException e) {
@@ -163,7 +165,7 @@ public class WorkManagerImpl implements WorkManager {
 		ReportMatch reportMatch = fileQueue.take();
 
 		if (reportMatch == ReportMatch.endOfQueue) {
-//		    scanQueue.put(PathVisit.endOfQueue);
+		    // scanQueue.put(PathVisit.endOfQueue);
 		    break;
 		}
 
@@ -218,7 +220,7 @@ public class WorkManagerImpl implements WorkManager {
     public BlockingQueue<VisitFailure> getFailuresBelow(String path) {
 	return db.loadFailuresBelow(path);
     }
-    
+
     @Override
     public void checkFailuresBelow(String path) {
 	BlockingQueue<VisitFailure> queue = db.loadFailuresBelow(path);
@@ -242,14 +244,13 @@ public class WorkManagerImpl implements WorkManager {
 		if (!file.exists()) {
 		    db.forgetFailure(visit.getFailureId());
 		} else {
-		    
-		    if(file.isDirectory()) {
-			if(lastDirectory == null || !lastDirectory.contains(visit.getPath())) {
+
+		    if (file.isDirectory()) {
+			if (lastDirectory == null || !lastDirectory.contains(visit.getPath())) {
 			    ScanJob scanJob = new ScanJob(visit.getPath(), scanDirId, skipDecider);
 			    getWalkerInputQueue().put(scanJob);
 			}
-		    }
-		    else {
+		    } else {
 			Path nioPath = FileSystems.getDefault().getPath(visit.getPath());
 			PathVisit pathVisit = new PathVisit(scanDirId, nioPath, null, Type.FILE);
 			getWalkerOutputQueue().put(pathVisit);
@@ -277,11 +278,68 @@ public class WorkManagerImpl implements WorkManager {
      */
     @Override
     public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort) {
+	waitForWalkers();
 	return db.findFiles(path1, path2, duplicates, sort);
     }
 
     @Override
     public BlockingQueue<ReportMatch> findProblems() {
+	waitForWalkers();
 	return db.findProblems();
+    }
+
+    @Override
+    public void moveOrCopyMatches(final BlockingQueue<ReportMatch> queue, final String from, final String to, final boolean copy, final boolean flatten) {
+	Thread processor = new Thread(new Runnable() {
+	    @Override
+	    public void run() {
+		while (true) {
+		    try {
+			ReportMatch match = queue.take();
+			if (match == ReportMatch.endOfQueue)
+			    break;
+			moveOrCopySingleMatch(match, from, to, copy, flatten);
+		    } catch (InterruptedException e) {
+			logger.error("reportMatchesProcessor was interrupted", e);
+		    }
+		}
+		// finished queue
+	    }
+	});
+	processor.start();
+    }
+
+    private void moveOrCopySingleMatch(ReportMatch match, String from, String to, boolean copy, boolean flatten) {
+	for (StoredFile stored : match.getStore()) {
+	    if (stored.getDirPath().startsWith(from)) {
+
+		String target = flatten ? to + stored.getFileName() : stored.getFullPath().replace(from, to);
+
+		if (copy) {
+		    try {
+			FileChannel sourceChannel = FileChannel.open(FileSystems.getDefault().getPath(stored.getFullPath()));
+			FileChannel targetChannel = FileChannel.open(FileSystems.getDefault().getPath(target));
+			sourceChannel.transferTo(0, Long.MAX_VALUE, targetChannel);
+		    } catch (IOException e) {
+			e.printStackTrace();
+		    }
+		} else {
+		    File file = new File(stored.getFullPath());
+		    file.renameTo(new File(target));
+		}
+
+	    }
+	}
+    }
+    
+    private void waitForWalkers() {
+	while((walkerInputQueue != null && (!walkerInputQueue.isEmpty()  || getWalker().isWorking())) && 
+	     (walkerOutputQueue != null && (!walkerOutputQueue.isEmpty() || visitProcessor.isWorking()))) {
+	    try {
+		this.wait();
+	    } catch (InterruptedException e) {
+		e.printStackTrace();
+	    }
+	}
     }
 }

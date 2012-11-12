@@ -20,6 +20,7 @@ public class PathVisitProcessor {
     private Logger logger;
     private SkipFileDecider skipDecider;
     private AppConfig config;
+    private boolean working = true;
 
     public PathVisitProcessor(BlockingQueue<PathVisit> queue, Logger logger, DatabaseWorker db, SkipFileDecider skipDecider, AppConfig config) {
 	this.queue = queue;
@@ -48,7 +49,9 @@ public class PathVisitProcessor {
     private void process() {
 	while (true) {
 	    try {
+		working = false;
 		PathVisit pathVisit = queue.take();
+		working = true;
 		handlePathVisit(pathVisit);
 
 		if (pathVisit == PathVisit.endOfQueue)
@@ -144,5 +147,9 @@ public class PathVisitProcessor {
 	}
 
 	logger.trace("finished DbInsertion: path=" + fullPath + " // Type=" + pathVisit.getType().toString() + " ; dbid=" + pathVisit.getDBId());
+    }
+
+    public boolean isWorking() {
+	return working;
     }
 }

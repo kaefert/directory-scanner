@@ -65,4 +65,6 @@ public interface WorkManager {
     public void checkFailuresBelow(String path);
 
     public BlockingQueue<VisitFailure> getFailuresBelow(String path);
+    
+    public void moveOrCopyMatches(BlockingQueue<ReportMatch> queue, String from, String to, boolean copy, boolean flatten);
 }

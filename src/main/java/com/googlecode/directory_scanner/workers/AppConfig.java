@@ -2,11 +2,15 @@ package com.googlecode.directory_scanner.workers;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.log4j.Level;
@@ -20,9 +24,9 @@ public class AppConfig extends Properties {
     private static final long serialVersionUID = 2402741572495774673L;
 
     public static String getSha1HexString(byte[] sha1) {
-	if(sha1==null)
+	if (sha1 == null)
 	    return "NULL";
-	
+
 	String result = "";
 	for (int i = 0; i < sha1.length; i++) {
 	    result += Integer.toString((sha1[i] & 0xff) + 0x100, 16).substring(1);
@@ -30,7 +34,6 @@ public class AppConfig extends Properties {
 	return result;
     }
 
-    
     private Logger logger;
     private String[] propertyPaths = new String[] { "./DirectoryScanner.properties", "/DirectoryScanner.properties", "DirectoryScanner.properties" };
     private Thread loader;
@@ -58,7 +61,7 @@ public class AppConfig extends Properties {
     public int getQueueLength() {
 	return Integer.valueOf(getProperty("queueLength"));
     }
-    
+
     public Date getSkipDirectoriesDoneAfter() {
 	String dateProp = getProperty("skipDirectoriesDoneAfter");
 	Date returnValue = null;
@@ -149,6 +152,53 @@ public class AppConfig extends Properties {
 	    } catch (IOException e) {
 		e.printStackTrace();
 	    }
+	}
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+	writePropertiesFile();
+	super.finalize();
+    }
+
+    private void writePropertiesFile() {
+	try {
+	    OutputStream outputStream = new FileOutputStream(propertyPaths[0]);
+	    this.store(outputStream, null);
+	    outputStream.close();
+	    
+	} catch (FileNotFoundException e) {
+	    e.printStackTrace();
+	} catch (IOException e) {
+	    e.printStackTrace();
+	}
+    }
+
+    public void addProfile(String name) {
+	int i = 1;
+	while (true) {
+	    String existingProfile = this.getProperty("ProfileName" + i);
+	    if (existingProfile == null || existingProfile.length() == 0) {
+		this.setProperty("ProfileName" + i, name);
+		writePropertiesFile();
+		return;
+	    } else if (existingProfile.equals(name)) {
+		return;
+	    }
+	    i++;
+	}
+    }
+
+    public List<String> getProfileList() {
+	ArrayList<String> profiles = new ArrayList<>();
+	int i = 1;
+	while (true) {
+	    String existingProfile = this.getProperty("ProfileName" + i);
+	    if (existingProfile == null || existingProfile.length() == 0) {
+		return profiles;
+	    } else
+		profiles.add(existingProfile);
+	    i++;
 	}
     }
 }

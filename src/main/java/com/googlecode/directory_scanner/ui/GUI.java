@@ -24,6 +24,7 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JScrollBar;
@@ -42,6 +43,7 @@ import org.apache.log4j.spi.LoggingEvent;
 import com.googlecode.directory_scanner.contracts.WorkManager;
 import com.googlecode.directory_scanner.domain.ReportMatch;
 import com.googlecode.directory_scanner.domain.StoredFile;
+import com.googlecode.directory_scanner.domain.VisitFailure;
 import com.googlecode.directory_scanner.workers.AppConfig;
 
 public class GUI {
@@ -55,6 +57,8 @@ public class GUI {
     private JScrollBar scrollPaneVerticalBar;
     private JTextArea txtrLog, txtrFileList;
 
+
+    private JLabel projectStatLabel = new JLabel("Current: Default");
     private JRadioButtonMenuItem sortNot, sortSize, sortCount, sortSizeCount, reportAll, reportPath1, report1stPath1, reportNotPath1, reportAllBut1stPath1,
     reportPath2, report1stPath2, reportNotPath2, reportAllBut1stPath2;
     private JCheckBoxMenuItem reportMetadata;
@@ -114,8 +118,9 @@ public class GUI {
 	initialize();
 
 	frmDirectoryScanner.setJMenuBar(createMenuBar());
+	projectStatLabel.setText(worker.getProfileStats());
 	frmDirectoryScanner.setVisible(true);
-	timer.start();
+	autoScrollTimer.start();
     }
 
     /**
@@ -343,24 +348,63 @@ public class GUI {
 	// this.txtrFileList.setEditable(false);
 	JScrollPane fileListScrollPane = new JScrollPane(this.txtrFileList);
 
-	JPanel fileListOptionsPanel = new JPanel();
-	fileListOptionsPanel.setLayout(new WrapLayout());
-
-	JPanel fileListPanel = new JPanel();
-	fileListPanel.setLayout(new BorderLayout());
-	fileListPanel.add(fileListOptionsPanel, BorderLayout.SOUTH);
-	fileListPanel.add(fileListScrollPane, BorderLayout.CENTER);
+//	JPanel fileListOptionsPanel = new JPanel();
+//	fileListOptionsPanel.setLayout(new WrapLayout());
+//
+//	JPanel fileListPanel = new JPanel();
+//	fileListPanel.setLayout(new BorderLayout());
+//	fileListPanel.add(fileListOptionsPanel, BorderLayout.SOUTH);
+//	fileListPanel.add(fileListScrollPane, BorderLayout.CENTER);
 
 	tabPane = new JTabbedPane();
 	// centerPanel.setLayout(new CardLayout());
 	tabPane.add(statusPanel, "Status");
-	tabPane.add(fileListPanel, "Files");
+	tabPane.add(fileListScrollPane, "Files");
 
 	contentPane.add(northPanel, BorderLayout.NORTH);
 	contentPane.add(tabPane, BorderLayout.CENTER);
     }
 
     private JMenuBar createMenuBar() {
+
+	final JMenu projMenu = new JMenu("Profile");
+	projMenu.setMnemonic('P');
+	projMenu.add(projectStatLabel);
+	projMenu.addSeparator();
+	JMenuItem np = new JMenuItem(new AbstractAction("New / Other Profile") {
+	    private static final long serialVersionUID = 4604811901635863257L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent arg0) {
+		
+		
+		String s = (String)JOptionPane.showInputDialog(
+			frmDirectoryScanner,
+		                    "Enter the Profile-Name:",
+		                    "Customized Dialog",
+		                    JOptionPane.PLAIN_MESSAGE);
+
+		//If a string was returned, say so.
+		if ((s != null) && (s.length() > 0)) {
+		    worker.setProfile(s);
+		    projectStatLabel.setText(worker.getProfileStats());
+		    addProjSelectItem(projMenu, s);
+		}
+		else {
+		    JOptionPane.showMessageDialog(frmDirectoryScanner, "You did not enter a profile-name, will keep the current profile.");
+		}
+		
+		
+		logger.error("New Project Action has not been implemented.");
+	    }
+	});
+	projMenu.add(np);
+	projMenu.addSeparator();
+	
+	for(final String profile : worker.getProfileList()) {
+	    addProjSelectItem(projMenu, profile);
+	}
+	
 
 	JMenu scanMenu = new JMenu("Scan");
 	scanMenu.setMnemonic('S');
@@ -398,7 +442,7 @@ public class GUI {
 	scanMenu.add(sp2);
 
 	scanMenu.addSeparator();
-	scanMenu.add(new JLabel("skip Directories done after:"));
+	scanMenu.add(new JLabel("skip Directories already scanned after:"));
 
 	Date skipNewer = config.getSkipDirectoriesDoneAfter();
 	
@@ -492,7 +536,7 @@ public class GUI {
 	scanMenu.addSeparator();
 	
 
-	JMenuItem ce = new JMenuItem(new AbstractAction("Check Files below Path1%") {
+	JMenuItem ce = new JMenuItem(new AbstractAction("Check Files stored in db below Path1%") {
 	    private static final long serialVersionUID = -8229587970729576138L;
 
 	    @Override
@@ -510,7 +554,7 @@ public class GUI {
 	scanMenu.add(ce);
 
 
-	JMenuItem ce1 = new JMenuItem(new AbstractAction("Check Files below Path2%") {
+	JMenuItem ce1 = new JMenuItem(new AbstractAction("Check Files stored in db below Path2%") {
 	    private static final long serialVersionUID = -8229587970729576138L;
 
 	    @Override
@@ -526,6 +570,42 @@ public class GUI {
 	ce1.setToolTipText("files stored in the database are checked for existence and same size & lastmodifieddate");
 	ce1.setMnemonic('k');
 	scanMenu.add(ce1);
+
+
+	JMenuItem cf = new JMenuItem(new AbstractAction("Check Failures below Path1%") {
+	    private static final long serialVersionUID = -8229587970729576138L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			worker.checkFailuresBelow(txtPath1.getText());
+		    }
+		}).start();
+	    }
+	});
+	cf.setToolTipText("failures that happened in previous scans are checked: removed if path does not exist, rescanned otherwise");
+	cf.setMnemonic('f');
+	scanMenu.add(cf);
+	
+	
+	JMenuItem cf1 = new JMenuItem(new AbstractAction("Check Failures below Path2%") {
+	    private static final long serialVersionUID = -8229587970729576138L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			worker.checkFailuresBelow(txtPath2.getText());
+		    }
+		}).start();
+	    }
+	});
+	cf1.setToolTipText("failures that happened in previous scans are checked: removed if path does not exist, rescanned otherwise");
+	cf1.setMnemonic('a');
+	scanMenu.add(cf1);
 	
 	JMenu toolsMenu = new JMenu("Tools");
 	toolsMenu.setMnemonic('T');
@@ -677,6 +757,21 @@ public class GUI {
 	    }
 	});
 
+	reportMenu.add(new AbstractAction("failures below Path1%") {
+	    private static final long serialVersionUID = -2431148865166087752L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent e) {
+		new Thread(new Runnable() {
+		    @Override
+		    public void run() {
+			reportFailures(worker.getFailuresBelow(txtPath1.getText()));
+		    }
+		}).start();
+	    }
+	});
+	
+
 	reportMenu.addSeparator();
 
 	sortNot = new JRadioButtonMenuItem("don't sort");
@@ -749,11 +844,25 @@ public class GUI {
 	});
 
 	JMenuBar jMenuBar = new JMenuBar();
+	jMenuBar.add(projMenu);
 	jMenuBar.add(scanMenu);
 	jMenuBar.add(toolsMenu);
 	jMenuBar.add(reportMenu);
 
 	return jMenuBar;
+    }
+
+    private void addProjSelectItem(JMenu projMenu, final String profile) {
+	JMenuItem lp = new JMenuItem(new AbstractAction(profile) {
+	    private static final long serialVersionUID = 4604811901635863258L;
+
+	    @Override
+	    public void actionPerformed(ActionEvent arg0) {
+		worker.setProfile(profile);
+		projectStatLabel.setText(worker.getProfileStats());
+	    }
+	});
+	projMenu.add(lp);
     }
 
     private void doReport(final BlockingQueue<ReportMatch> matches) {
@@ -854,6 +963,35 @@ public class GUI {
 	}
     }
 
+    private void reportFailures(final BlockingQueue<VisitFailure> failuresBelow) {
+
+	if (txtrFileList.getText().length() > 2)
+	    txtrFileList.append("\n\n");
+
+	Thread processor = new Thread(new Runnable() {
+	    @Override
+	    public void run() {
+		while (true) {
+		    try {
+			VisitFailure failure = failuresBelow.take();
+			if (failure == VisitFailure.endOfQueue)
+			    break;
+			
+			String size = "; size=" + failure.getSize();
+			if(failure.getError().contains("different sizes"))
+			    size += "; sizeRead=" + failure.getSizeRead();
+			txtrFileList.append(failure.getPath() + size + "; error=" + failure.getError() + "\n");
+			
+		    } catch (InterruptedException e) {
+			logger.error("reportMatchesProcessor was interrupted", e);
+		    }
+		}
+		txtrFileList.append("end of report.");
+	    }
+	});
+	processor.start();
+    }
+
     private ReportMatch.Sort getReportSortMode() {
 	if (sortNot.isSelected()) {
 	    return ReportMatch.Sort.NOSORT;
@@ -869,7 +1007,7 @@ public class GUI {
 	return ReportMatch.Sort.NOSORT;
     }
 
-    final javax.swing.Timer timer = new Timer(1000, new ActionListener() {
+    final javax.swing.Timer autoScrollTimer = new Timer(1000, new ActionListener() {
 
 	private Date lastRefresh = new Date();
 

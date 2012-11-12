@@ -13,32 +13,67 @@ import java.util.concurrent.BlockingQueue;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import com.googlecode.directory_scanner.contracts.SkipDecider;
+import com.googlecode.directory_scanner.contracts.SkipDirectoryDecider;
 import com.googlecode.directory_scanner.domain.PathVisit;
+import com.googlecode.directory_scanner.domain.ScanJob;
 
 public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 
     private Logger logger;
     private Integer scanPathId;
-    private BlockingQueue<PathVisit> queue;
-    private SkipDecider skipDecider;
+    private BlockingQueue<PathVisit> outputQueue;
+    private BlockingQueue<ScanJob> inputQueue;
 
-    public DirectoryTreeWalker(Logger logger, String scanPath, Integer scanPathId, BlockingQueue<PathVisit> queue, SkipDecider skipDecider) {
+    private SkipDirectoryDecider skipDecider;
+
+    // private AppConfig config;
+
+    public DirectoryTreeWalker(Logger logger, BlockingQueue<PathVisit> outputQueue, BlockingQueue<ScanJob> inputQueue) {
 	this.logger = logger;
-	this.queue = queue;
-	this.skipDecider = skipDecider;
+	this.outputQueue = outputQueue;
+	this.inputQueue = inputQueue;
+	// this.skipDecider = skipDecider;
+	// this.config = config;
 
+	startInputQueueProcessor();
+    }
+
+    private void startInputQueueProcessor() {
+	new Thread(new Runnable() {
+	    @Override
+	    public void run() {
+
+		while (true) {
+		    try {
+			ScanJob scanJob = inputQueue.take();
+
+			if (ScanJob.endOfQueue.equals(scanJob))
+			    break;
+
+			walkDirectory(scanJob);
+
+		    } catch (InterruptedException e) {
+			logger.error("interrupted while taking Path String from dirQueue (or putting into scanQeue)", e);
+		    }
+		}
+	    }
+	}).start();
+    }
+
+    private void walkDirectory(ScanJob scanJob) {
+	String scanPath = scanJob.getPath();
+	skipDecider = scanJob.getSkipDecider();
 	try {
 	    Path path = FileSystems.getDefault().getPath(scanPath);
-	    this.scanPathId = scanPathId;
-	    logger.info("starting scan with scanroot=\"" + scanPath + "\"");
+	    this.scanPathId = scanJob.getScanDirId();
+	    logger.info("starting scan with scanroot=\"" + path.toString() + "\"");
 	    Files.walkFileTree(path, this);
 
-	    try {
-		queue.put(PathVisit.endOfQueue);
-	    } catch (InterruptedException e) {
-		logger.error("interrupted while trying to put FileVisit into queue", e);
-	    }
+//	    try {
+//		outputQueue.put(PathVisit.endOfQueue);
+//	    } catch (InterruptedException e) {
+//		logger.error("interrupted while trying to put FileVisit into queue", e);
+//	    }
 
 	    logger.info("finished scan with scanroot=\"" + scanPath + "\"");
 
@@ -46,6 +81,8 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 	    logger.log(Level.ERROR, "invalid path='" + scanPath + "'", e);
 	} catch (IOException e) {
 	    logger.log(Level.ERROR, "could not read path='" + scanPath + "'", e);
+	} finally {
+	    skipDecider = null;
 	}
     }
 
@@ -54,15 +91,16 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
     @Override
     public FileVisitResult visitFile(Path file, BasicFileAttributes attr) {
 	if (attr.isSymbolicLink()) {
-	    logger.info("Found Symbolic link: " + file + "; size=" + attr.size());
+	    logger.info("Found Symbolic link (WONT PROCESS IT AS FILE): " + file + "; size=" + attr.size());
+	    return FileVisitResult.CONTINUE;
 	}
 
 	if (attr.isRegularFile()) {
-	    logger.info("Found Regular file: " + file + "; size=" + attr.size());
+	    logger.info("Found Regular           file=" + file + "; size=" + attr.size());
 	}
 
 	if (attr.isOther()) {
-	    logger.info("Found Other file: " + file + "; size=" + attr.size());
+	    logger.info("Found Other             file=" + file + "; size=" + attr.size());
 	}
 
 	if (attr.isDirectory()) {
@@ -71,7 +109,7 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 	    + file);
 	} else {
 	    try {
-		queue.put(new PathVisit(scanPathId, file, attr, PathVisit.Type.FILE));
+		outputQueue.put(new PathVisit(scanPathId, file, attr, PathVisit.Type.FILE));
 	    } catch (InterruptedException e) {
 		logger.error("interrupted while trying to put FileVisit into queue", e);
 	    }
@@ -104,7 +142,7 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 	// System.out.format("Directory: %s%n", dir);
 
 	try {
-	    queue.put(new PathVisit(scanPathId, dir, null, PathVisit.Type.FINISHED_DIRECTORY));
+	    outputQueue.put(new PathVisit(scanPathId, dir, null, PathVisit.Type.FINISHED_DIRECTORY));
 	} catch (InterruptedException e) {
 	    logger.error("interrupted while trying to put FileVisit into queue", e);
 	}
@@ -121,7 +159,7 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
     @Override
     public FileVisitResult visitFileFailed(Path file, IOException exc) {
 	try {
-	    queue.put(new PathVisit(scanPathId, file, null, PathVisit.Type.FAILURE));
+	    outputQueue.put(new PathVisit(scanPathId, file, null, PathVisit.Type.FAILURE));
 	} catch (InterruptedException e) {
 	    logger.error("interrupted while trying to put FileVisit into queue", e);
 	}

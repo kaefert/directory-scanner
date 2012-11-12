@@ -67,6 +67,13 @@ public class ReportMatch {
 	    public String getSQL() {
 		return " ORDER BY f.size*(SELECT count(f2.id) FROM files f2 WHERE f2.sha1 = f.sha1) DESC, f.sha1";
 	    }
+	},
+	
+	PATH {
+	    @Override
+	    public String getSQL() {
+		return " ORDER BY d.path, f.filename";
+	    }
 	};
 
 	public abstract String getSQL();

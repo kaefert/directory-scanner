@@ -4,7 +4,7 @@
 
 	<groupId>com.googlecode.directory-scanner</groupId>
 	<artifactId>directory-scanner</artifactId>
-	<version>0.0.3</version>
+	<version>0.0.5</version>
 	<packaging>jar</packaging>
 
 	<name>directory-scanner</name>
@@ -35,7 +35,7 @@
 			<version>13.0</version>
 		</dependency>
 
-		<!-- aspectj for extreme logging --> <!-- -->
+		<!-- aspectj for extreme logging --> <!--
 		<dependency>
 			<groupId>org.aspectj</groupId>
 			<artifactId>aspectjrt</artifactId>
@@ -45,7 +45,7 @@
 			<groupId>org.aspectj</groupId>
 			<artifactId>aspectjtools</artifactId>
 			<version>${aspectj.version}</version>
-		</dependency>
+		</dependency> -->
 
 		<dependency>
 			<groupId>com.h2database</groupId>
@@ -74,7 +74,7 @@
 
 		<plugins>
 
-			<!-- aspectj for extreme logging --> <!-- -->
+			<!-- aspectj for extreme logging --> <!--
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>aspectj-maven-plugin</artifactId>
@@ -113,7 +113,7 @@
 						<version>${aspectj.version}</version>
 					</dependency>
 				</dependencies>
-			</plugin>
+			</plugin> -->
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -175,6 +175,7 @@
 			</plugin>
 
 		</plugins>
+
 		<pluginManagement>
 			<plugins> <!-- fixing stupid bug in eclipse, that shows some errors that don't have 
 					any effect -->

@@ -17,17 +17,27 @@ public class DatabaseConnectionHandler {
     private Properties appConfig;
     private boolean useFallback = false;
     
-    public boolean isUsingFallback() {
-	return useFallback;
-    }
+    private String profile = null;
+    private Map<String, Connection> connections = null;
+
 
     public DatabaseConnectionHandler(Logger logger, Properties config) {
 	this.logger = logger;
 	this.appConfig = config;
+	this.profile = config.getProperty("ProfileName1");
     }
-
-    private Map<String, Connection> connections = null;
-
+ 
+    public boolean isUsingFallback() {
+	return useFallback;
+    }
+    
+    public void setProfile(String profile) {
+	disconnectAll(connections);
+	connections = null;
+	useFallback = false;
+	this.profile = profile;
+    }
+    
     public Connection getConnection() {
 	return getConnection(appConfig.getProperty("databaseName"));
     }
@@ -37,7 +47,7 @@ public class DatabaseConnectionHandler {
 	    connections = new HashMap<String, Connection>();
 	}
 	
-	if(useFallback)
+	if(isUsingFallback())
 	    return connections.get("");
 	
 	if("1".equals(appConfig.getProperty("dbFallBackUseAsDefault")))
@@ -73,7 +83,7 @@ public class DatabaseConnectionHandler {
     private Connection getFallbackDatabase() {
 	try {
 	    Class.forName(appConfig.getProperty("dbFallBackDriver")).newInstance();
-	    Connection connection = DriverManager.getConnection(appConfig.getProperty("dbFallBackURL"), appConfig.getProperty("dbFallBackUser"),
+	    Connection connection = DriverManager.getConnection(appConfig.getProperty("dbFallBackURL") + "_" + profile, appConfig.getProperty("dbFallBackUser"),
 	    appConfig.getProperty("dbFallBackPassword"));
 	    connections.put("", connection);
 	    useFallback = true;
@@ -93,7 +103,7 @@ public class DatabaseConnectionHandler {
     private void createDatabase(String databaseName) {
 	try {
 	    Connection global = getConnection("");
-	    if (global != null && !useFallback) { //fallback is a single database, doesn't need create database statement
+	    if (global != null && !isUsingFallback()) { //fallback is a single database, doesn't need create database statement
 		PreparedStatement createDB = global.prepareStatement("create Database " + databaseName + ";");
 		// createDB.setString(1, databaseName);
 		createDB.execute();
@@ -106,24 +116,26 @@ public class DatabaseConnectionHandler {
 
     @Override
     protected void finalize() throws Throwable {
-
+	disconnectAll(connections);
+	super.finalize();
+    }
+    
+    private void disconnectAll(Map<String, Connection> connections) {
 	if (connections != null) {
-
 	    for (Map.Entry<String, Connection> entry : connections.entrySet()) {
 
-		entry.getValue().close();
+		try {
+		    entry.getValue().close();
+		} catch (SQLException e) {
+		    e.printStackTrace();
+		}
+		
 		logger.log(Level.INFO, "Disconnected from database \"" + entry.getKey() + "\".");
-	    }
-
-	    for (Connection connection : connections.values()) {
-		connection.close();
 	    }
 	    logger.log(Level.INFO, "Disconnected all open database-connections.");
 	} else {
 	    logger.log(Level.INFO, "No database-connections have been opened.");
 	}
-
-	super.finalize();
     }
 
     private boolean createDirectoriesTableFailed = false;
@@ -136,7 +148,7 @@ public class DatabaseConnectionHandler {
 	    Connection global = getConnection();
 	    if (global != null) {
 		String sql = appConfig.getProperty("sql_createTableDirectories");
-		if(useFallback)
+		if(isUsingFallback())
 		    sql = sql.replace(" ENGINE=InnoDB", "");
 		PreparedStatement createTable = global.prepareStatement(sql);
 		createTable.execute();
@@ -158,7 +170,7 @@ public class DatabaseConnectionHandler {
 	    Connection global = getConnection();
 	    if (global != null) {
 		String sql = appConfig.getProperty("sql_createTableFiles");
-		if(useFallback)
+		if(isUsingFallback())
 		    sql = sql.replace(" ENGINE=InnoDB", "");
 		PreparedStatement createTable = global.prepareStatement(sql);
 		createTable.execute();
@@ -180,7 +192,7 @@ public class DatabaseConnectionHandler {
 	    Connection global = getConnection();
 	    if (global != null) {
 		String sql = appConfig.getProperty("sql_createTableFailures");
-		if(useFallback)
+		if(isUsingFallback())
 		    sql = sql.replace(" ENGINE=InnoDB", "");
 		PreparedStatement createTable = global.prepareStatement(sql);
 		createTable.execute();

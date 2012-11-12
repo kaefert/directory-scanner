@@ -11,6 +11,9 @@ public class PathVisit {
     private BasicFileAttributes attr;
     private int scanRoot;
     private byte[] sha1;
+    
+    private boolean checkedDB = false;
+    private Integer dbId = null;
 
     public enum Type {
 	FILE, FINISHED_DIRECTORY, FAILURE
@@ -47,6 +50,11 @@ public class PathVisit {
 	return attr;
     }
     
+    public void checkedDB(Integer dbId) {
+	this.checkedDB = true;
+	this.dbId = dbId;
+    }
+    
     public void fileScanned(long bytesRead, byte[] sha1) {
 	this.bytesRead = bytesRead;
 	this.sha1 = sha1;
@@ -58,6 +66,14 @@ public class PathVisit {
 
     public byte[] getSha1() {
         return sha1;
+    }
+
+    public boolean haveCheckedDB() {
+        return checkedDB;
+    }
+
+    public Integer getDBId() {
+        return dbId;
     }
 
     private PathVisit() {};

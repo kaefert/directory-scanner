@@ -17,4 +17,11 @@ java -Xms512m -Xmx2048m -Xmn256m -XX:PermSize=512m -XX:MaxPermSize=2048m -verbos
 
 /usr/lib/jvm/java-7-openjdk-amd64/jre/bin/java -Xms512m -Xmx2048m -Xmn256m -XX:PermSize=512m -XX:MaxPermSize=2048m -verbose:gc -XX:+HeapDumpOnOutOfMemoryError -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/home/kaefert/Documents/directory-scanner_gc.log -jar "/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49/Daten/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
 
-java -jar "/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49/Daten/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.2-SNAPSHOT-jar-with-dependencies.jar"
+java -jar "/media/d170ed69-ed03-4bf0-8bbd-32c4b3b8cc49/Daten/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.3-jar-with-dependencies.jar"
+
+java -jar "/home/kaefert/Userdata/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.4-jar-with-dependencies.jar"
+
+/usr/lib/jvm/java-7-openjdk-amd64/jre/bin/java -jar "/home/kaefert/Userdata/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.4-jar-with-dependencies.jar"
+
+
+java -agentlib:hprof -jar "/home/kaefert/Userdata/Development/workspace-juno-java/directory-scanner/target/directory-scanner-0.0.5-jar-with-dependencies.jar"

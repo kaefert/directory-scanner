@@ -15,6 +15,8 @@ public aspect Aspect {
     
     pointcut publicOperation() : execution(* com.googlecode.directory_scanner.*.*(..))
     || execution(* com.googlecode.directory_scanner.workers.WorkManagerImpl.*(..))
+//    || execution(* com.googlecode.directory_scanner.workers.DatabaseWorkerImpl.*(..))
+//    || execution(* com.googlecode.directory_scanner.workers.DatabaseConnectionHandler.*(..))
     || execution(* com.googlecode.directory_scanner.ui.GUI.doReport(..))
 //    || execution(* com.googlecode.directory_scanner.workers.*.*(..))
     ;

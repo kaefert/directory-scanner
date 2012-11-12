@@ -8,7 +8,7 @@ import java.util.concurrent.BlockingQueue;
 import org.apache.log4j.Logger;
 
 import com.googlecode.directory_scanner.contracts.DatabaseWorker;
-import com.googlecode.directory_scanner.contracts.SkipDecider;
+import com.googlecode.directory_scanner.contracts.SkipFileDecider;
 import com.googlecode.directory_scanner.domain.PathVisit;
 import com.googlecode.directory_scanner.domain.PathVisit.Type;
 import com.googlecode.directory_scanner.workers.ChecksumSHA1Calculator.Sha1WithSize;
@@ -18,10 +18,10 @@ public class PathVisitProcessor {
     private BlockingQueue<PathVisit> queue, dbInsertQueue;
     private DatabaseWorker db;
     private Logger logger;
-    private SkipDecider skipDecider;
+    private SkipFileDecider skipDecider;
     private AppConfig config;
 
-    public PathVisitProcessor(BlockingQueue<PathVisit> queue, Logger logger, DatabaseWorker db, SkipDecider skipDecider, AppConfig config) {
+    public PathVisitProcessor(BlockingQueue<PathVisit> queue, Logger logger, DatabaseWorker db, SkipFileDecider skipDecider, AppConfig config) {
 	this.queue = queue;
 	this.logger = logger;
 	this.db = db;
@@ -62,12 +62,14 @@ public class PathVisitProcessor {
 
     private void handlePathVisit(PathVisit pathVisit) {
 
+	logger.debug("start handlePathVisit, path=" + pathVisit.getPath());
 	boolean doDbInsertion = true;
-
+	
 	if (pathVisit.getType() == Type.FILE) {
 
-	    if (skipDecider != null && skipDecider.decideFileSkip(pathVisit.getPath(), pathVisit.getAttributes())) {
+	    if (skipDecider != null && skipDecider.decideFileSkip(pathVisit)) {
 		doDbInsertion = false;
+		logger.debug("skipping unchanged     file=" + pathVisit.getPath());
 	    } else {
 		try {
 		    // although this is a long running action, we will not fork
@@ -80,6 +82,7 @@ public class PathVisitProcessor {
 
 		    Sha1WithSize sha1WithSize = ChecksumSHA1Calculator.getSHA1Checksum(pathVisit.getPath());
 		    pathVisit.fileScanned(sha1WithSize.getBytesRead(), sha1WithSize.getSha1());
+		    logger.debug("finished sha1 calculation for file=" + pathVisit.getPath());
 
 		} catch (NoSuchAlgorithmException | IOException e) {
 		    logger.warn("could not calculate sha1 for file: " + pathVisit.getPath());
@@ -114,6 +117,7 @@ public class PathVisitProcessor {
     private void doDbInsertion(PathVisit pathVisit) {
 
 	String fullPath = pathVisit.getPath().toString();
+	logger.trace("starting DbInsertion: path=" + fullPath + " // Type=" + pathVisit.getType().toString() + " ; dbid=" + pathVisit.getDBId());
 
 	if (pathVisit.getType() == Type.FINISHED_DIRECTORY) {
 	    db.insertDirectory(fullPath, pathVisit.getScanRoot(), true);
@@ -123,7 +127,10 @@ public class PathVisitProcessor {
 		// sanity check succeeded, insert using the supplied data
 		String fileName = pathVisit.getPath().getFileName().toString();
 		String directory = pathVisit.getPath().getParent().toString();
-		db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), pathVisit.getLastModified(), pathVisit.getSize(), pathVisit.getSha1());
+		if(pathVisit.haveCheckedDB())
+		    db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), pathVisit.getLastModified(), pathVisit.getSize(), pathVisit.getSha1(), pathVisit.getDBId());
+		else
+		    db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), pathVisit.getLastModified(), pathVisit.getSize(), pathVisit.getSha1());
 	    } else {
 		// sanity check failed. insert file as FAILURE
 		db.insertFailure(fullPath, pathVisit.getScanRoot(), pathVisit.getSize(), pathVisit.getBytesRead(), "different sizes!");
@@ -136,5 +143,6 @@ public class PathVisitProcessor {
 	    db.insertFailure(fullPath, pathVisit.getScanRoot(), pathVisit.getSize(), -1L, "unknown PathVisit type");
 	}
 
+	logger.trace("finished DbInsertion: path=" + fullPath + " // Type=" + pathVisit.getType().toString() + " ; dbid=" + pathVisit.getDBId());
     }
 }

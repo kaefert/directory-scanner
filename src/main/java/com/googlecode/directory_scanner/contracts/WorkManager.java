@@ -1,11 +1,19 @@
 package com.googlecode.directory_scanner.contracts;
 
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
 import com.googlecode.directory_scanner.domain.ReportMatch;
+import com.googlecode.directory_scanner.domain.VisitFailure;
 
 public interface WorkManager {
 
+    public String getProfileStats();
+    
+    public void setProfile(String name);
+    
+    public List<String> getProfileList();
+    
     /**
      * Creates a PathWalker that walks the filesystem tree below the given path.
      * its findings are incooperated into the db according to the config.
@@ -53,5 +61,8 @@ public interface WorkManager {
     public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, ReportMatch.Sort sort);
     
     public BlockingQueue<ReportMatch> findProblems();
+    
+    public void checkFailuresBelow(String path);
 
+    public BlockingQueue<VisitFailure> getFailuresBelow(String path);
 }

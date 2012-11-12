@@ -15,6 +15,12 @@ public class StoredFile {
     private String fileName;
     private long size;
     private Date lastModified, scanDate;
+    private Integer fileId;
+
+    public StoredFile(String dirPath, String fileName, long size, Date lastModified, Date scanDate, Integer fileId) {
+	this(dirPath, fileName, size, lastModified, scanDate);
+	this.fileId = fileId;
+    }
     
     public StoredFile(String dirPath, String fileName, long size, Date lastModified, Date scanDate) {
 	this.dirPath = dirPath;
@@ -22,6 +28,10 @@ public class StoredFile {
 	this.size = size;
 	this.lastModified = lastModified;
 	this.scanDate = scanDate;
+    }
+    
+    public Integer getFileId() {
+        return fileId;
     }
 
     public String getDirPath() {

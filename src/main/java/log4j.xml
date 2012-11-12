@@ -1,17 +1,37 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
 
+<!--
+	%d{yyyy-MM-dd HH:mm:ss,SSS} -> 2012-08-27 18:08:33,838
+	[%p] -> [DEBUG]
+	[%t] -> [Thread-5]
+	(%F:%L) -> (PathVisitProcessor.java:65)
+	{%c} -> {directory-scanner_logger_Thread[main,5,main]}
+	%m%n -> message
+
+2012-08-27 18:08:33,972 [DEBUG] [Thread-5] {directory-scanner_logger_Thread[main,5,main]} (PathVisitProcessor.java:65) start handlePathVisit, path=/media/kaefert/9ff210fe-fd7d-48ac-b2f5-9f8fb94fda07/Daten/Daten_BIG/Fremde_Daten/Gerhard/gerhard_website_mirrors/www-pdp8online-com/www.pdp8online.com/shows/vcfe08/pics/small/dscf0068.jpg
+2012-08-27 18:08:34,116 [DEBUG] [Thread-5] {directory-scanner_logger_Thread[main,5,main]} (PathVisitProcessor.java:72) skipping unchanged file=/media/kaefert/9ff210fe-fd7d-48ac-b2f5-9f8fb94fda07/Daten/Daten_BIG/Fremde_Daten/Gerhard/gerhard_website_mirrors/www-pdp8online-com/www.pdp8online.com/shows/vcfe08/pics/small/dscf0068.jpg
+-->
+
 <log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
-  <appender name="console" class="org.apache.log4j.ConsoleAppender"> 
-    <param name="Target" value="System.out"/> 
+  <appender name="stdout" class="org.apache.log4j.ConsoleAppender"> 
     <layout class="org.apache.log4j.PatternLayout"> 
-      <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss,SSS} [%p] %m%n"/> 
+      <!-- Pattern to output the caller's file name and line number -->
+      <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss,SSS} [%p] [%t] %m%n"/>
     </layout> 
   </appender> 
-
-  <root>
-    <priority value ="debug" /> 
-    <appender-ref ref="console" /> 
+  <appender name="R" class="com.googlecode.directory_scanner.ui.NewLogForEachRunFileAppender"> 
+    <param name="file" value="directory-scanner.log"/>
+    <!-- <param name="MaxFileSize" value="100KB"/>  -->
+    <!-- Keep one backup file
+    <param name="MaxBackupIndex" value="1"/> -->
+    <layout class="org.apache.log4j.PatternLayout"> 
+      <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss,SSS} [%p] [%t] %m%n"/>
+    </layout> 
+  </appender>  
+  <root> 
+    <priority value ="trace" /> 
+    <appender-ref ref="stdout" /> 
+    <appender-ref ref="R" /> 
   </root>
-  
 </log4j:configuration>

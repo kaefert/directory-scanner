@@ -44,6 +44,7 @@ import com.googlecode.directory_scanner.domain.StoredFile;
 import com.googlecode.directory_scanner.domain.VisitFailure;
 import com.googlecode.directory_scanner.workers.AppConfig;
 
+@SuppressWarnings("serial")
 public class GUI {
 
     private JFrame frmDirectoryScanner;
@@ -175,21 +176,21 @@ public class GUI {
 	// gbc_lblDate.gridy = 2;
 	// northFormPanel.add(lblDate, gbc_lblDate);
 
-	txtPath1 = new JTextField("/");
+	txtPath1 = new JTextField("");
 	GridBagConstraints gbc_txtPath1 = new GridBagConstraints();
 	gbc_txtPath1.fill = GridBagConstraints.HORIZONTAL;
 	gbc_txtPath1.gridx = 1;
 	gbc_txtPath1.gridy = 0;
 	northFormPanel.add(txtPath1, gbc_txtPath1);
 
-	txtPath2 = new JTextField("/");
+	txtPath2 = new JTextField("");
 	GridBagConstraints gbc_txtPath2 = new GridBagConstraints();
 	gbc_txtPath2.fill = GridBagConstraints.HORIZONTAL;
 	gbc_txtPath2.gridx = 1;
 	gbc_txtPath2.gridy = 1;
 	northFormPanel.add(txtPath2, gbc_txtPath2);
 
-	txtPath3 = new JTextField("/");
+	txtPath3 = new JTextField("");
 	GridBagConstraints gbc_txtPath3 = new GridBagConstraints();
 	gbc_txtPath3.fill = GridBagConstraints.HORIZONTAL;
 	gbc_txtPath3.gridx = 1;
@@ -394,7 +395,6 @@ public class GUI {
 	projMenu.add(projectStatLabel);
 	projMenu.addSeparator();
 	JMenuItem np = new JMenuItem(new AbstractAction("New / Other Profile") {
-	    private static final long serialVersionUID = 4604811901635863257L;
 
 	    @Override
 	    public void actionPerformed(ActionEvent arg0) {
@@ -433,7 +433,7 @@ public class GUI {
 	projMenu.add(lp);
     }
 
-    private JMenu createScanMenu() {
+	private JMenu createScanMenu() {
 	JMenu scanMenu = new JMenu("Scan");
 	scanMenu.setMnemonic('S');
 	JMenuItem sp1 = new JMenuItem(new AbstractAction("Scan Path1") {
@@ -454,7 +454,7 @@ public class GUI {
 
 	JMenuItem sp2 = new JMenuItem(new AbstractAction("Scan Path2") {
 
-	    @Override
+		@Override
 	    public void actionPerformed(ActionEvent e) {
 		new Thread(new Runnable() {
 		    @Override

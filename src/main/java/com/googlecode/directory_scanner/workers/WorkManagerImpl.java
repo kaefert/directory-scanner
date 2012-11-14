@@ -293,6 +293,7 @@ public class WorkManagerImpl implements WorkManager {
 	Thread processor = new Thread(new Runnable() {
 	    @Override
 	    public void run() {
+		logger.info("started moveOrCopyMatches Thread processor");
 		while (true) {
 		    try {
 			ReportMatch match = queue.take();

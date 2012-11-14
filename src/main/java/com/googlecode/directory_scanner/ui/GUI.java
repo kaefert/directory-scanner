@@ -31,7 +31,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.KeyStroke;
 import javax.swing.Timer;
 
 import org.apache.log4j.AppenderSkeleton;
@@ -450,11 +449,10 @@ public class GUI {
 		}).start();
 	    }
 	});
-	sp1.setAccelerator(KeyStroke.getKeyStroke("1"));
+	sp1.setMnemonic('1');
 	scanMenu.add(sp1);
 
 	JMenuItem sp2 = new JMenuItem(new AbstractAction("Scan Path2") {
-	    private static final long serialVersionUID = 5505858980619274011L;
 
 	    @Override
 	    public void actionPerformed(ActionEvent e) {
@@ -467,7 +465,7 @@ public class GUI {
 	    }
 
 	});
-	sp2.setAccelerator(KeyStroke.getKeyStroke("2"));
+	sp2.setMnemonic('2');
 	scanMenu.add(sp2);
 
 	scanMenu.addSeparator();

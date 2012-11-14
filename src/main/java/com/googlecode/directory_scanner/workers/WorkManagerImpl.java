@@ -4,6 +4,8 @@
 package com.googlecode.directory_scanner.workers;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.FileSystems;
@@ -11,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Date;
 import java.util.List;
@@ -348,9 +349,9 @@ public class WorkManagerImpl implements WorkManager {
 		});
 		processor.start();
 	}
-	
+
 	private String attachSlashIfNotThere(String source) {
-		if(source.endsWith("/"))
+		if (source.endsWith("/"))
 			return source;
 		else
 			return source + "/";
@@ -361,28 +362,64 @@ public class WorkManagerImpl implements WorkManager {
 		for (StoredFile stored : match.getStore()) {
 			if (stored.getDirPath().startsWith(from)) {
 
-				String target = flatten ? attachSlashIfNotThere(to) + stored.getFileName() 
-						: stored.getFullPath().replace(from, to);
+				String target = flatten ? attachSlashIfNotThere(to)
+						+ stored.getFileName() : stored.getFullPath().replace(
+						from, to);
 
 				if (copy) {
-					try {
-						FileChannel sourceChannel = FileChannel
-								.open(FileSystems.getDefault().getPath(
-										stored.getFullPath()));
-						FileChannel targetChannel = FileChannel
-								.open(FileSystems.getDefault().getPath(target), StandardOpenOption.CREATE);
-						sourceChannel.transferTo(0, Long.MAX_VALUE,
-								targetChannel);
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
+					copyFile(new File(stored.getFullPath()), new File(target));
 				} else {
-					File file = new File(stored.getFullPath());
-					file.renameTo(new File(target));
+					moveFile(stored.getFullPath(), target);
 				}
 
 			}
 		}
+	}
+
+	private void moveFile(String source, String target) {
+		File fileSource = new File(source);
+		File fileTarget = new File(target);
+		boolean success = fileSource.renameTo(fileTarget);
+		if (!success)
+			if(copyFile(fileSource, fileTarget))
+				fileSource.delete();
+
+	}
+
+	public boolean copyFile(File sourceFile, File destFile) {
+
+		FileChannel source = null;
+		FileChannel destination = null;
+		boolean success = true;
+		try {
+			if (!destFile.exists()) {
+				destFile.createNewFile();
+			}
+			source = new FileInputStream(sourceFile).getChannel();
+			destination = new FileOutputStream(destFile).getChannel();
+			destination.transferFrom(source, 0, source.size());
+		} catch (IOException e) {
+			success = false;
+			e.printStackTrace();
+		} finally {
+			if (source != null) {
+				try {
+					source.close();
+				} catch (IOException e) {
+					success = false;
+					e.printStackTrace();
+				}
+			}
+			if (destination != null) {
+				try {
+					destination.close();
+				} catch (IOException e) {
+					success = false;
+					e.printStackTrace();
+				}
+			}
+		}
+		return success;
 	}
 
 	private void waitForWalkers() {

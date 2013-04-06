@@ -8,17 +8,20 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.CopyOption;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
 import com.googlecode.directory_scanner.contracts.DatabaseWorker;
@@ -50,15 +53,13 @@ public class WorkManagerImpl implements WorkManager {
 
 	private BlockingQueue<PathVisit> getWalkerOutputQueue() {
 		if (walkerOutputQueue == null) {
-			walkerOutputQueue = new ArrayBlockingQueue<>(
-					config.getQueueLength());
+			walkerOutputQueue = new ArrayBlockingQueue<>(config.getQueueLength());
 			SkipFileDecider decider = null;
 
 			if ("1".equals(config.getProperty("doneFiles")))
 				decider = new SkipFileDeciderImpl(logger, db);
 
-			visitProcessor = new PathVisitProcessor(walkerOutputQueue, logger,
-					db, decider, config);
+			visitProcessor = new PathVisitProcessor(walkerOutputQueue, logger, db, decider, config);
 		}
 		return walkerOutputQueue;
 	}
@@ -76,8 +77,7 @@ public class WorkManagerImpl implements WorkManager {
 	private DirectoryTreeWalker getWalker() {
 		if (walker == null && !creatingWalker) {
 			creatingWalker = true;
-			walker = new DirectoryTreeWalker(logger, getWalkerOutputQueue(),
-					getWalkerInputQueue());
+			walker = new DirectoryTreeWalker(logger, getWalkerOutputQueue(), getWalkerInputQueue());
 		}
 		return walker;
 	}
@@ -119,15 +119,12 @@ public class WorkManagerImpl implements WorkManager {
 		db.forgetFailuresBelow(path);
 
 		Date after = config.getSkipDirectoriesDoneAfter();
-		int cacheDoneDirectories = Integer.parseInt(config
-				.getProperty("cacheDoneDirectories"));
-		SkipDirectoryDecider skipDecider = new SkipDirectoryDeciderImpl(path,
-				after, cacheDoneDirectories, db, logger);
+		int cacheDoneDirectories = Integer.parseInt(config.getProperty("cacheDoneDirectories"));
+		SkipDirectoryDecider skipDecider = new SkipDirectoryDeciderImpl(path, after, cacheDoneDirectories, db, logger);
 		Integer scanDirId = db.getDirectoryId(path, true);
 
 		try {
-			getWalkerInputQueue()
-					.put(new ScanJob(path, scanDirId, skipDecider));
+			getWalkerInputQueue().put(new ScanJob(path, scanDirId, skipDecider));
 		} catch (InterruptedException e) {
 			logger.error("could not put ScanJob into walkerInputQueue!", e);
 		}
@@ -150,8 +147,7 @@ public class WorkManagerImpl implements WorkManager {
 
 				File file = new File(dbPath);
 				if (!file.exists()) {
-					logger.warn("directory does not exist any more! deleting from db --> "
-							+ dbPath);
+					logger.warn("directory does not exist any more! deleting from db --> " + dbPath);
 					db.forgetDirectoryTree(dbPath);
 				}
 				// else {
@@ -160,15 +156,12 @@ public class WorkManagerImpl implements WorkManager {
 				// }
 
 			} catch (InterruptedException e) {
-				logger.error(
-						"interrupted while taking Path String from dirQueue (or putting into scanQeue)",
-						e);
+				logger.error("interrupted while taking Path String from dirQueue (or putting into scanQeue)", e);
 			}
 		}
 		//
 
-		BlockingQueue<ReportMatch> fileQueue = db.findFiles(path, null, false,
-				Sort.NOSORT);
+		BlockingQueue<ReportMatch> fileQueue = db.findFiles(path, null, false, Sort.NOSORT);
 
 		final Integer scanDir = db.getDirectoryId(path, true);
 
@@ -186,35 +179,24 @@ public class WorkManagerImpl implements WorkManager {
 					Path ioPath = Paths.get(stored.getFullPath());
 
 					try {
-						BasicFileAttributes attr = Files.readAttributes(ioPath,
-								BasicFileAttributes.class, new LinkOption[] {});
+						BasicFileAttributes attr = Files.readAttributes(ioPath, BasicFileAttributes.class, new LinkOption[] {});
 
 						String problem = "";
 						if (attr.size() != stored.getSize()) {
 							problem = "different sizes";
-							logger.warn("different sizes: " + attr.size()
-									+ " ; " + stored.getSize());
+							logger.warn("different sizes: " + attr.size() + " ; " + stored.getSize());
 						}
 						if (stored.getLastModified() == null) {
 							problem += " no lastModified Date stored";
-						} else if (attr.lastModifiedTime().toMillis() != stored
-								.getLastModified().getTime()) {
+						} else if (attr.lastModifiedTime().toMillis() != stored.getLastModified().getTime()) {
 							problem += " lastModified Date differs";
-							logger.warn("lastModified differs: "
-									+ config.getDateFormatter().format(
-											new Date(attr.lastModifiedTime()
-													.toMillis()))
-									+ " ; "
-									+ config.getDateFormatter().format(
-											stored.getLastModified()));
+							logger.warn("lastModified differs: " + config.getDateFormatter().format(new Date(attr.lastModifiedTime().toMillis())) + " ; "
+									+ config.getDateFormatter().format(stored.getLastModified()));
 						}
 						if (problem.length() > 0) {
-							logger.warn("will rescan file, because: " + problem
-									+ " -> " + stored.getFullPath());
+							logger.warn("will rescan file, because: " + problem + " -> " + stored.getFullPath());
 
-							getWalkerOutputQueue().put(
-									new PathVisit(scanDir, ioPath, attr,
-											Type.FILE));
+							getWalkerOutputQueue().put(new PathVisit(scanDir, ioPath, attr, Type.FILE));
 
 							// Sha1WithSize sha1WithSize =
 							// ChecksumSHA1Calculator.getSHA1Checksum(stored.getFullPath());
@@ -227,19 +209,14 @@ public class WorkManagerImpl implements WorkManager {
 						// }
 
 					} catch (IOException e) {
-						logger.warn("file does not exist anymore -> "
-								+ stored.getFullPath());
-						db.forgetFile(
-								db.getDirectoryId(stored.getDirPath(), false),
-								stored.getFileName());
+						logger.warn("file does not exist anymore -> " + stored.getFullPath());
+						db.forgetFile(db.getDirectoryId(stored.getDirPath(), false), stored.getFileName());
 					}
 					// }
 				}
 
 			} catch (InterruptedException e) {
-				logger.error(
-						"interrupted while taking ReportMatch from queue (or putting into scanQeue)",
-						e);
+				logger.error("interrupted while taking ReportMatch from queue (or putting into scanQeue)", e);
 			}
 		}
 	}
@@ -255,10 +232,8 @@ public class WorkManagerImpl implements WorkManager {
 		Integer scanDirId = db.getDirectoryId(path, true);
 
 		Date after = config.getSkipDirectoriesDoneAfter();
-		int cacheDoneDirectories = Integer.parseInt(config
-				.getProperty("cacheDoneDirectories"));
-		SkipDirectoryDecider skipDecider = new SkipDirectoryDeciderImpl(path,
-				after, cacheDoneDirectories, db, logger);
+		int cacheDoneDirectories = Integer.parseInt(config.getProperty("cacheDoneDirectories"));
+		SkipDirectoryDecider skipDecider = new SkipDirectoryDeciderImpl(path, after, cacheDoneDirectories, db, logger);
 
 		String lastDirectory = null;
 		while (true) {
@@ -276,25 +251,19 @@ public class WorkManagerImpl implements WorkManager {
 				} else {
 
 					if (file.isDirectory()) {
-						if (lastDirectory == null
-								|| !lastDirectory.contains(visit.getPath())) {
-							ScanJob scanJob = new ScanJob(visit.getPath(),
-									scanDirId, skipDecider);
+						if (lastDirectory == null || !lastDirectory.contains(visit.getPath())) {
+							ScanJob scanJob = new ScanJob(visit.getPath(), scanDirId, skipDecider);
 							getWalkerInputQueue().put(scanJob);
 						}
 					} else {
-						Path nioPath = FileSystems.getDefault().getPath(
-								visit.getPath());
-						PathVisit pathVisit = new PathVisit(scanDirId, nioPath,
-								null, Type.FILE);
+						Path nioPath = FileSystems.getDefault().getPath(visit.getPath());
+						PathVisit pathVisit = new PathVisit(scanDirId, nioPath, null, Type.FILE);
 						getWalkerOutputQueue().put(pathVisit);
 					}
 				}
 
 			} catch (InterruptedException e) {
-				logger.error(
-						"interrupted while taking VisitFailure from queue, or putting into walkerInput or walkerOutput queue",
-						e);
+				logger.error("interrupted while taking VisitFailure from queue, or putting into walkerInput or walkerOutput queue", e);
 			}
 		}
 	}
@@ -308,13 +277,11 @@ public class WorkManagerImpl implements WorkManager {
 	}
 
 	/**
-	 * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String,
-	 *      java.lang.String, boolean,
+	 * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String, java.lang.String, boolean,
 	 *      com.googlecode.directory_scanner.domain.ReportMatch.Sort)
 	 */
 	@Override
-	public BlockingQueue<ReportMatch> findFiles(String path1, String path2,
-			boolean duplicates, Sort sort) {
+	public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort) {
 		waitForWalkers();
 		return db.findFiles(path1, path2, duplicates, sort);
 	}
@@ -326,9 +293,7 @@ public class WorkManagerImpl implements WorkManager {
 	}
 
 	@Override
-	public void moveOrCopyMatches(final BlockingQueue<ReportMatch> queue,
-			final String from, final String to, final boolean copy,
-			final boolean flatten) {
+	public void moveOrCopyMatches(final BlockingQueue<ReportMatch> queue, final String from, final String to, final boolean copy, final boolean flatten) {
 		Thread processor = new Thread(new Runnable() {
 			@Override
 			public void run() {
@@ -340,8 +305,7 @@ public class WorkManagerImpl implements WorkManager {
 							break;
 						moveOrCopySingleMatch(match, from, to, copy, flatten);
 					} catch (InterruptedException e) {
-						logger.error("reportMatchesProcessor was interrupted",
-								e);
+						logger.error("reportMatchesProcessor was interrupted", e);
 					}
 				}
 				// finished queue
@@ -357,23 +321,41 @@ public class WorkManagerImpl implements WorkManager {
 			return source + "/";
 	}
 
-	private void moveOrCopySingleMatch(ReportMatch match, String from,
-			String to, boolean copy, boolean flatten) {
+	private void moveOrCopySingleMatch(ReportMatch match, String from, String to, boolean copy, boolean flatten) {
 		for (StoredFile stored : match.getStore()) {
 			if (stored.getDirPath().startsWith(from)) {
 
-				String target = flatten ? attachSlashIfNotThere(to)
-						+ stored.getFileName() : stored.getFullPath().replace(
-						from, to);
+				String name = stored.getFileName();
+				String dir = attachSlashIfNotThere(to);
+
+				if (!flatten) {
+					dir = stored.getFullPath().replace(from, to).replace(name, "");
+				}
+				ensureDirExists(dir);
+				String target = dir + name;
 
 				if (copy) {
-					copyFile(new File(stored.getFullPath()), new File(target));
+					copyFile(stored.getFullPath(), target);
+					// copyFile(new File(stored.getFullPath()), new File(target));
 				} else {
 					moveFile(stored.getFullPath(), target);
 				}
-
 			}
 		}
+	}
+
+	private String ensureDirExists(String path) {
+		ensureDirExists(new File(path));
+		return path;
+	}
+
+	private File ensureDirExists(File target) {
+		try {
+			FileUtils.forceMkdir(target);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return target;
 	}
 
 	private void moveFile(String source, String target) {
@@ -381,52 +363,89 @@ public class WorkManagerImpl implements WorkManager {
 		File fileTarget = new File(target);
 		boolean success = fileSource.renameTo(fileTarget);
 		if (!success)
-			if(copyFile(fileSource, fileTarget))
+			if (copyFile(source, target))
 				fileSource.delete();
-
 	}
 
-	public boolean copyFile(File sourceFile, File destFile) {
+	private boolean copyFile(String source, String target) {
 
-		FileChannel source = null;
+		// FileSystem fs = FileSystems.getDefault();
+		// Path sourcePath = fs.getPath(source);
+		// Path targetPath = fs.getPath(target);
+
+		// Method1 : use java.nio.file.Files.copy
+		Path srcFile = Paths.get(source);
+		Path targetFile = Paths.get(target);
+
+		// configure how to copy or move a file.
+		CopyOption[] options = new CopyOption[] { StandardCopyOption.COPY_ATTRIBUTES };
+
+		// Copy srcFile to targetFile
+		try {
+			Files.copy(srcFile, targetFile, options);
+			return true;
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+
+		// Method2 : use apache commons.io
+		File sourceFile = new File(source);
+		File destFile = new File(target);
+		try {
+			FileUtils.copyFile(sourceFile, destFile, true);
+			return true;
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+
+		// try {
+		// OutputStream targetStream = new FileOutputStream(target);
+		// Files.copy(sourcePath, targetStream);
+		// } catch (FileNotFoundException e) {
+		// e.printStackTrace();
+		// } catch (IOException e) {
+		// e.printStackTrace();
+		// }
+
+		// Method3 : using filechannels (doesn't preserve timestamps!)
+		FileChannel sourceChnl = null;
 		FileChannel destination = null;
-		boolean success = true;
 		try {
 			if (!destFile.exists()) {
 				destFile.createNewFile();
 			}
-			source = new FileInputStream(sourceFile).getChannel();
+			sourceChnl = new FileInputStream(sourceFile).getChannel();
 			destination = new FileOutputStream(destFile).getChannel();
-			destination.transferFrom(source, 0, source.size());
+			destination.transferFrom(sourceChnl, 0, sourceChnl.size());
 		} catch (IOException e) {
-			success = false;
 			e.printStackTrace();
+			return false;
 		} finally {
-			if (source != null) {
+			if (sourceChnl != null) {
 				try {
-					source.close();
+					sourceChnl.close();
 				} catch (IOException e) {
-					success = false;
 					e.printStackTrace();
+					return false;
 				}
 			}
 			if (destination != null) {
 				try {
 					destination.close();
 				} catch (IOException e) {
-					success = false;
 					e.printStackTrace();
+					return false;
 				}
 			}
 		}
-		return success;
+		return true;
+
 	}
 
+
 	private void waitForWalkers() {
-		while ((walkerInputQueue != null && (!walkerInputQueue.isEmpty() || getWalker()
-				.isWorking()))
-				&& (walkerOutputQueue != null && (!walkerOutputQueue.isEmpty() || visitProcessor
-						.isWorking()))) {
+		while ((walkerInputQueue != null && (!walkerInputQueue.isEmpty() || getWalker().isWorking()))
+				&& (walkerOutputQueue != null && (!walkerOutputQueue.isEmpty() || visitProcessor.isWorking()))) {
 			try {
 				this.wait(1000);
 			} catch (InterruptedException e) {

@@ -11,65 +11,64 @@ import java.util.Date;
  */
 public class VisitFailure {
 
-    private int failureId;
-    private String path;
-    private Date scanDate;
-    private long size, sizeRead;
-    private String error;
-    
-//    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY \
-//    ,path VARCHAR(1000) NOT NULL \
-//	,scanDir_id INT NULL \
-//	,scandate DateTime NOT NULL \
-//	,size BIGINT NULL \
-//	,sizeRead BIGINT NULL \
-//	,error VARCHAR(1000) NOT NULL \
-    
-    public VisitFailure(int id, String path, Date scanDate, long size, long sizeRead, String error) {
-	this.failureId = id;
-	this.path = path;
-	this.size = size;
-	this.sizeRead = sizeRead;
-	this.error = error;
-    }
+	private int failureId;
+	private String path;
+	private Date scanDate;
+	private long size, sizeRead;
+	private String error;
 
-    public int getFailureId() {
-        return failureId;
-    }
+	// id INT NOT NULL AUTO_INCREMENT PRIMARY KEY \
+	// ,path VARCHAR(1000) NOT NULL \
+	// ,scanDir_id INT NULL \
+	// ,scandate DateTime NOT NULL \
+	// ,size BIGINT NULL \
+	// ,sizeRead BIGINT NULL \
+	// ,error VARCHAR(1000) NOT NULL \
 
-    public String getPath() {
-        return path;
-    }
+	public VisitFailure(int id, String path, Date scanDate, long size, long sizeRead, String error) {
+		this.failureId = id;
+		this.path = path;
+		this.size = size;
+		this.sizeRead = sizeRead;
+		this.error = error;
+	}
 
-    public Date getScanDate() {
-        return scanDate;
-    }
+	public int getFailureId() {
+		return failureId;
+	}
 
-    public long getSize() {
-        return size;
-    }
+	public String getPath() {
+		return path;
+	}
 
-    public long getSizeRead() {
-        return sizeRead;
-    }
+	public Date getScanDate() {
+		return scanDate;
+	}
 
-    public String getError() {
-        return error;
-    }
-    
-    private boolean isDirectory;
+	public long getSize() {
+		return size;
+	}
 
-    public boolean isDirectory() {
-	return isDirectory;
-    }
+	public long getSizeRead() {
+		return sizeRead;
+	}
 
-    public void setIsDirectory(boolean isDirectory) {
-	this.isDirectory = isDirectory;
-    }
+	public String getError() {
+		return error;
+	}
 
+	private boolean isDirectory;
 
-    private VisitFailure() {
-    };
+	public boolean isDirectory() {
+		return isDirectory;
+	}
 
-    public static VisitFailure endOfQueue = new VisitFailure();
+	public void setIsDirectory(boolean isDirectory) {
+		this.isDirectory = isDirectory;
+	}
+
+	private VisitFailure() {
+	};
+
+	public static VisitFailure endOfQueue = new VisitFailure();
 }

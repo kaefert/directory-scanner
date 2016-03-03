@@ -190,8 +190,9 @@ public class WorkManagerImpl implements WorkManager {
 							problem += " no lastModified Date stored";
 						} else if (attr.lastModifiedTime().toMillis() != stored.getLastModified().getTime()) {
 							problem += " lastModified Date differs";
-							logger.warn("lastModified differs: " + config.getDateFormatter().format(new Date(attr.lastModifiedTime().toMillis())) + " ; "
-									+ config.getDateFormatter().format(stored.getLastModified()));
+							logger.warn("lastModified differs: "
+									+ config.getDateFormatter().format(new Date(attr.lastModifiedTime().toMillis()))
+									+ " ; " + config.getDateFormatter().format(stored.getLastModified()));
 						}
 						if (problem.length() > 0) {
 							logger.warn("will rescan file, because: " + problem + " -> " + stored.getFullPath());
@@ -277,8 +278,8 @@ public class WorkManagerImpl implements WorkManager {
 	}
 
 	/**
-	 * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String, java.lang.String, boolean,
-	 *      com.googlecode.directory_scanner.domain.ReportMatch.Sort)
+	 * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String, java.lang.String,
+	 *      boolean, com.googlecode.directory_scanner.domain.ReportMatch.Sort)
 	 */
 	@Override
 	public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort) {
@@ -441,7 +442,6 @@ public class WorkManagerImpl implements WorkManager {
 		return true;
 
 	}
-
 
 	private void waitForWalkers() {
 		while ((walkerInputQueue != null && (!walkerInputQueue.isEmpty() || getWalker().isWorking()))

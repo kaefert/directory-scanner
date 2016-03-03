@@ -11,50 +11,50 @@ import java.util.Date;
  */
 public class StoredFile {
 
-    private String dirPath;
-    private String fileName;
-    private long size;
-    private Date lastModified, scanDate;
-    private Integer fileId;
+	private String dirPath;
+	private String fileName;
+	private long size;
+	private Date lastModified, scanDate;
+	private Integer fileId;
 
-    public StoredFile(String dirPath, String fileName, long size, Date lastModified, Date scanDate, Integer fileId) {
-	this(dirPath, fileName, size, lastModified, scanDate);
-	this.fileId = fileId;
-    }
-    
-    public StoredFile(String dirPath, String fileName, long size, Date lastModified, Date scanDate) {
-	this.dirPath = dirPath;
-	this.fileName = fileName;
-	this.size = size;
-	this.lastModified = lastModified;
-	this.scanDate = scanDate;
-    }
-    
-    public Integer getFileId() {
-        return fileId;
-    }
+	public StoredFile(String dirPath, String fileName, long size, Date lastModified, Date scanDate, Integer fileId) {
+		this(dirPath, fileName, size, lastModified, scanDate);
+		this.fileId = fileId;
+	}
 
-    public String getDirPath() {
-        return dirPath;
-    }
+	public StoredFile(String dirPath, String fileName, long size, Date lastModified, Date scanDate) {
+		this.dirPath = dirPath;
+		this.fileName = fileName;
+		this.size = size;
+		this.lastModified = lastModified;
+		this.scanDate = scanDate;
+	}
 
-    public String getFileName() {
-        return fileName;
-    }
-    
-    public String getFullPath() {
-	return dirPath + "/" + fileName;
-    }
+	public Integer getFileId() {
+		return fileId;
+	}
 
-    public long getSize() {
-        return size;
-    }
+	public String getDirPath() {
+		return dirPath;
+	}
 
-    public Date getLastModified() {
-        return lastModified;
-    }
+	public String getFileName() {
+		return fileName;
+	}
 
-    public Date getScanDate() {
-        return scanDate;
-    }
+	public String getFullPath() {
+		return dirPath + "/" + fileName;
+	}
+
+	public long getSize() {
+		return size;
+	}
+
+	public Date getLastModified() {
+		return lastModified;
+	}
+
+	public Date getScanDate() {
+		return scanDate;
+	}
 }

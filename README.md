@@ -16,3 +16,5 @@ The newer versions have a GUI, but the CLI can also still be used, but the CLI d
 For ease of use I also embedded the jar files for an h2 database into the jar that you find in the download section (starting from v0.0.2) and automatically fallback to this if you don't have an adapted properties file with useable database config options.
 
 If you want to use another database beside h2 and mysql you will need to add the jdbc driver to the classpath when running the application. (I've chosen h2 as fallback option since this review stated that its the most performant embeddable java sql database http://jars.de/java/embedded-java-datenbanken)
+
+(project has originally been published 2012-04-26 @ https://code.google.com/archive/p/directory-scanner/ and exported to github on 2016-03-03 since I wanted to use it again and maybe also continue working on it)

@@ -5,8 +5,9 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.concurrent.BlockingQueue;
 
+import com.googlecode.directory_scanner.domain.FindFilter;
 import com.googlecode.directory_scanner.domain.ReportMatch;
-import com.googlecode.directory_scanner.domain.ReportMatch.Sort;
+import com.googlecode.directory_scanner.domain.Sort;
 import com.googlecode.directory_scanner.domain.StoredFile;
 import com.googlecode.directory_scanner.domain.VisitFailure;
 
@@ -35,7 +36,7 @@ public interface DatabaseWorker {
 
     public void forgetDirectoryTree(String path);
 
-    public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort);
+    public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort, FindFilter filter);
     
     public BlockingQueue<ReportMatch> findProblems();
 

@@ -39,7 +39,9 @@ import org.apache.log4j.Logger;
 import org.apache.log4j.spi.LoggingEvent;
 
 import com.googlecode.directory_scanner.contracts.WorkManager;
+import com.googlecode.directory_scanner.domain.FindFilter;
 import com.googlecode.directory_scanner.domain.ReportMatch;
+import com.googlecode.directory_scanner.domain.Sort;
 import com.googlecode.directory_scanner.domain.StoredFile;
 import com.googlecode.directory_scanner.domain.VisitFailure;
 import com.googlecode.directory_scanner.workers.AppConfig;
@@ -57,8 +59,9 @@ public class GUI {
 	private JTextArea txtrLog, txtrFileList;
 
 	private JLabel projectStatLabel = new JLabel("Current: Default");
-	private JRadioButtonMenuItem sortNot, sortSize, sortCount, sortSizeCount, reportAll, reportPath1, report1stPath1,
-			reportNotPath1, reportAllBut1stPath1, reportPath2, report1stPath2, reportNotPath2, reportAllBut1stPath2;
+	private JRadioButtonMenuItem sortSha1, sortSize, sortCount, sortSizeCount, reportAll, reportPath1, report1stPath1,
+			reportNotPath1, reportAllBut1stPath1, reportPath2, report1stPath2, reportNotPath2, reportAllBut1stPath2,
+			actionScopeAll, actionScopeOlder, actionScopeOlderEquals, performActionForEquals, performActionForNewerEquals, performActionForNewer;
 	private JCheckBoxMenuItem reportMetadata, autoScanReport, autoScanAction, flattenTarget;
 
 	private JCheckBox chckbxAutoscroll;
@@ -158,7 +161,7 @@ public class GUI {
 		lblPath2 = new JLabel("Path 2:  ");
 		GridBagConstraints gbc_lblPath2 = new GridBagConstraints();
 		gbc_lblPath2.anchor = GridBagConstraints.WEST;
-		gbc_lblPath2.gridx = 0;
+		gbc_lblPath2.gridx = 0; 
 		gbc_lblPath2.gridy = 1;
 		northFormPanel.add(lblPath2, gbc_lblPath2);
 
@@ -385,6 +388,8 @@ public class GUI {
 		jMenuBar.add(createToolsMenu());
 		jMenuBar.add(createReportMenu());
 		jMenuBar.add(createActionsMenu());
+		jMenuBar.add(createFilterMenu());
+		jMenuBar.add(createSortMenu());
 
 		return jMenuBar;
 	}
@@ -695,7 +700,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 1 });
-						doReport(worker.findFiles(txtPath1.getText(), null, false, getReportSortMode()));
+						doReport(worker.findFiles(txtPath1.getText(), null, false, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -709,7 +714,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 1 });
-						doReport(worker.findFiles(txtPath1.getText(), txtPath1.getText(), true, getReportSortMode()));
+						doReport(worker.findFiles(txtPath1.getText(), txtPath1.getText(), true, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -723,7 +728,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 1 });
-						doReport(worker.findFiles(txtPath1.getText(), null, true, getReportSortMode()));
+						doReport(worker.findFiles(txtPath1.getText(), null, true, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -737,7 +742,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 2 });
-						doReport(worker.findFiles(txtPath2.getText(), null, false, getReportSortMode()));
+						doReport(worker.findFiles(txtPath2.getText(), null, false, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -751,7 +756,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 2 });
-						doReport(worker.findFiles(txtPath2.getText(), txtPath2.getText(), true, getReportSortMode()));
+						doReport(worker.findFiles(txtPath2.getText(), txtPath2.getText(), true, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -765,7 +770,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 2 });
-						doReport(worker.findFiles(txtPath2.getText(), null, true, getReportSortMode()));
+						doReport(worker.findFiles(txtPath2.getText(), null, true, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -779,7 +784,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 1, 2 });
-						doReport(worker.findFiles(txtPath1.getText(), txtPath2.getText(), true, getReportSortMode()));
+						doReport(worker.findFiles(txtPath1.getText(), txtPath2.getText(), true, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -793,7 +798,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 1, 2 });
-						doReport(worker.findFiles(txtPath1.getText(), txtPath2.getText(), false, getReportSortMode()));
+						doReport(worker.findFiles(txtPath1.getText(), txtPath2.getText(), false, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -807,7 +812,7 @@ public class GUI {
 					@Override
 					public void run() {
 						autoscan(true, new int[] { 1, 2 });
-						doReport(worker.findFiles(txtPath2.getText(), txtPath1.getText(), false, getReportSortMode()));
+						doReport(worker.findFiles(txtPath2.getText(), txtPath1.getText(), false, getReportSortMode(), getFilter()));
 					}
 				}).start();
 			}
@@ -842,26 +847,7 @@ public class GUI {
 		});
 
 		reportMenu.addSeparator();
-
-		sortNot = new JRadioButtonMenuItem("don't sort");
-		sortSize = new JRadioButtonMenuItem("sort by size");
-		sortCount = new JRadioButtonMenuItem("sort by count");
-		sortSizeCount = new JRadioButtonMenuItem("sort by size*count", true);
-
-		ButtonGroup sortOptions = new ButtonGroup();
-		sortOptions.add(sortNot);
-		sortOptions.add(sortSize);
-		sortOptions.add(sortCount);
-		sortOptions.add(sortSizeCount);
-		// sortNot.
-
-		reportMenu.add(sortNot);
-		reportMenu.add(sortSize);
-		reportMenu.add(sortCount);
-		reportMenu.add(sortSizeCount);
-
-		reportMenu.addSeparator();
-
+		
 		reportMetadata = new JCheckBoxMenuItem("report match metadata", true);
 		reportMenu.add(reportMetadata);
 
@@ -934,7 +920,7 @@ public class GUI {
 					public void actionPerformed(ActionEvent e) {
 						autoscan(false, new int[] { 1, 2 });
 						BlockingQueue<ReportMatch> queue = worker.findFiles(txtPath1.getText(), txtPath2.getText(),
-								true, getReportSortMode());
+								true, getReportSortMode(), getFilter());
 						worker.moveOrCopyMatches(queue, txtPath2.getText(), txtPath3.getText(), false,
 								flattenTarget.isSelected());
 					}
@@ -950,7 +936,7 @@ public class GUI {
 			public void actionPerformed(ActionEvent e) {
 				autoscan(false, new int[] { 1, 2 });
 				BlockingQueue<ReportMatch> queue = worker.findFiles(txtPath2.getText(), txtPath1.getText(), false,
-						getReportSortMode());
+						getReportSortMode(), getFilter());
 				worker.moveOrCopyMatches(queue, txtPath2.getText(), txtPath3.getText(), false,
 						flattenTarget.isSelected());
 			}
@@ -966,7 +952,7 @@ public class GUI {
 					public void actionPerformed(ActionEvent e) {
 						autoscan(false, new int[] { 1, 2 });
 						BlockingQueue<ReportMatch> queue = worker.findFiles(txtPath1.getText(), txtPath2.getText(),
-								true, getReportSortMode());
+								true, getReportSortMode(), getFilter());
 						worker.moveOrCopyMatches(queue, txtPath2.getText(), txtPath3.getText(), true,
 								flattenTarget.isSelected());
 					}
@@ -982,7 +968,7 @@ public class GUI {
 			public void actionPerformed(ActionEvent e) {
 				autoscan(false, new int[] { 1, 2 });
 				BlockingQueue<ReportMatch> queue = worker.findFiles(txtPath2.getText(), txtPath1.getText(), false,
-						getReportSortMode());
+						getReportSortMode(), getFilter());
 				worker.moveOrCopyMatches(queue, txtPath2.getText(), txtPath3.getText(), true,
 						flattenTarget.isSelected());
 			}
@@ -991,6 +977,59 @@ public class GUI {
 		actionsMenu.add(copyNeg);
 
 		return actionsMenu;
+	}
+	
+	private JMenu createFilterMenu() {
+		
+		JMenu menu = new JMenu("Filter");
+		menu.setMnemonic('F');
+		
+		actionScopeAll = new JRadioButtonMenuItem("Don't filter", true);
+		actionScopeOlder = new JRadioButtonMenuItem("only files older in %path2");
+		actionScopeOlderEquals = new JRadioButtonMenuItem("only files older/equals in %path2");
+		performActionForEquals = new JRadioButtonMenuItem("only files with equals timestamps");
+		performActionForNewerEquals = new JRadioButtonMenuItem("only files newer/equals in %path2");
+		performActionForNewer = new JRadioButtonMenuItem("only files newer in %path2");
+		
+		ButtonGroup actionLimitation = new ButtonGroup();
+		actionLimitation.add(actionScopeAll);
+		actionLimitation.add(actionScopeOlder);
+		actionLimitation.add(actionScopeOlderEquals);
+		actionLimitation.add(performActionForEquals);
+		actionLimitation.add(performActionForNewerEquals);
+		actionLimitation.add(performActionForNewer);
+		
+		menu.add(actionScopeAll);
+		menu.add(actionScopeOlder);
+		menu.add(actionScopeOlderEquals);
+		menu.add(performActionForEquals);
+		menu.add(performActionForNewerEquals);
+		menu.add(performActionForNewer);
+		
+		return menu;
+	}
+
+	private JMenu createSortMenu() {
+		final JMenu menu = new JMenu("Sort");
+		menu.setMnemonic('O');
+
+		sortSha1 = new JRadioButtonMenuItem("sort by sha1");
+		sortSize = new JRadioButtonMenuItem("sort by size");
+		sortCount = new JRadioButtonMenuItem("sort by count");
+		sortSizeCount = new JRadioButtonMenuItem("sort by size*count", true);
+
+		ButtonGroup sortOptions = new ButtonGroup();
+		sortOptions.add(sortSha1);
+		sortOptions.add(sortSize);
+		sortOptions.add(sortCount);
+		sortOptions.add(sortSizeCount);
+
+		menu.add(sortSha1);
+		menu.add(sortSize);
+		menu.add(sortCount);
+		menu.add(sortSizeCount);
+		
+		return menu;
 	}
 
 	private void autoscan(boolean report, int[] paths) {
@@ -1144,19 +1183,39 @@ public class GUI {
 		processor.start();
 	}
 
-	private ReportMatch.Sort getReportSortMode() {
-		if (sortNot.isSelected()) {
-			return ReportMatch.Sort.NOSORT;
+	private Sort getReportSortMode() {
+		if (sortSha1.isSelected()) {
+			return Sort.SHA1;
 		} else if (sortCount.isSelected()) {
-			return ReportMatch.Sort.COUNT;
+			return Sort.COUNT;
 		} else if (sortSize.isSelected()) {
-			return ReportMatch.Sort.SIZE;
+			return Sort.SIZE;
 		} else if (sortSizeCount.isSelected()) {
-			return ReportMatch.Sort.SIZETIMESCOUNT;
+			return Sort.SIZETIMESCOUNT;
 		}
 
 		logger.error("inconsistent gui state - sortMode");
-		return ReportMatch.Sort.NOSORT;
+		return Sort.SHA1;
+	}
+
+	private FindFilter getFilter() {
+		
+		if (actionScopeAll.isSelected()) {
+			return FindFilter.UNFILTERED;
+		} else if (actionScopeOlder.isSelected()) {
+			return FindFilter.OLDER;
+		} else if (actionScopeOlderEquals.isSelected()) {
+			return FindFilter.OLDEREQUALS;
+		} else if (performActionForEquals.isSelected()) {
+			return FindFilter.EQUALS;
+		} else if (performActionForNewerEquals.isSelected()) {
+			return FindFilter.NEWEREQUALS;
+		} else if (performActionForNewer.isSelected()) {
+			return FindFilter.NEWER;
+		}
+
+		logger.error("inconsistent gui state - actionScope");
+		return FindFilter.UNFILTERED;
 	}
 
 	final javax.swing.Timer autoScrollTimer = new Timer(1000, new ActionListener() {

@@ -1,14 +1,20 @@
 package com.googlecode.directory_scanner.domain;
 
-import java.util.HashSet;
+import java.util.ArrayList;
 
 import com.googlecode.directory_scanner.workers.AppConfig;
 
+/**
+ * A ReportMatch represents multiple files with the same sha1 hash and the same size (so duplicates)
+ * 
+ * @author kaefert
+ *
+ */
 public class ReportMatch {
 
 	private byte[] sha1;
 	private long size;
-	private HashSet<StoredFile> store;
+	private ArrayList<StoredFile> store;
 	private String metaData;
 
 	// private HashSet<Integer> fileIds;
@@ -17,7 +23,7 @@ public class ReportMatch {
 		this.sha1 = sha1;
 		// TO DO: rethink reporting
 		// this.fileIds = databaseHandler.getFileSha1s().get(sha1);
-		this.store = new HashSet<>(2);
+		this.store = new ArrayList<>(2);
 		this.size = size;
 	}
 
@@ -29,7 +35,7 @@ public class ReportMatch {
 		return size;
 	}
 
-	public HashSet<StoredFile> getStore() {
+	public ArrayList<StoredFile> getStore() {
 		return store;
 	}
 
@@ -45,42 +51,6 @@ public class ReportMatch {
 					+ "; size=" + getSize() + "; count=" + getStore().size()
 					+ "; totalSize=" + getSize() * getStore().size();
 	}
-
-	public static enum Sort {
-		NOSORT {
-			@Override
-			public String getSQL() {
-				return " ORDER BY f.sha1";
-			}
-		},
-		SIZE {
-			@Override
-			public String getSQL() {
-				return " ORDER BY f.size DESC, f.sha1";
-			}
-		},
-		COUNT {
-			@Override
-			public String getSQL() {
-				return " ORDER BY (SELECT count(f2.id) FROM files WHERE f2.sha1 = f.sha1) DESC, f.sha1";
-			}
-		},
-		SIZETIMESCOUNT {
-			@Override
-			public String getSQL() {
-				return " ORDER BY f.size*(SELECT count(f2.id) FROM files f2 WHERE f2.sha1 = f.sha1) DESC, f.sha1";
-			}
-		},
-
-		PATH {
-			@Override
-			public String getSQL() {
-				return " ORDER BY d.path, f.filename";
-			}
-		};
-
-		public abstract String getSQL();
-	};
 
 	private ReportMatch() {
 	};

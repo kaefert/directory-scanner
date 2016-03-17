@@ -23,10 +23,11 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.googlecode.directory_scanner.contracts.DatabaseWorker;
+import com.googlecode.directory_scanner.domain.FindFilter;
 import com.googlecode.directory_scanner.domain.ReportMatch;
-import com.googlecode.directory_scanner.domain.VisitFailure;
-import com.googlecode.directory_scanner.domain.ReportMatch.Sort;
+import com.googlecode.directory_scanner.domain.Sort;
 import com.googlecode.directory_scanner.domain.StoredFile;
+import com.googlecode.directory_scanner.domain.VisitFailure;
 
 /**
  * @author kaefert
@@ -34,14 +35,14 @@ import com.googlecode.directory_scanner.domain.StoredFile;
  */
 public class DatabaseWorkerImpl implements DatabaseWorker {
 
-	private Logger logger;
+	Logger logger;
 	private AppConfig config;
 	private DatabaseConnectionHandler db;
 	private String profile;
 
 	/**
-     * 
-     */
+	 * 
+	 */
 	public DatabaseWorkerImpl(Logger logger, AppConfig config) {
 		this.logger = logger;
 		this.config = config;
@@ -76,19 +77,20 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	}
 
 	/**
-	 * @see com.googlecode.directory_scanner.contracts.DatabaseWorker#getDirectoriesDoneBelowAfterIfLessThen(java.lang.String, java.util.Date, int)
+	 * @see com.googlecode.directory_scanner.contracts.DatabaseWorker#getDirectoriesDoneBelowAfterIfLessThen(java.lang.String,
+	 *      java.util.Date, int)
 	 */
 	@Override
 	public HashSet<String> getDirectoriesDoneBelowAfterIfLessThen(String below, Date after, int limit) {
 		try {
-			String sql = config.getProperty("sql_selectDoneDirectories");
+			String sql = config.readSqlFromClasspath("selectDoneDirectories.sql");
 			PreparedStatement stmt = db.getConnection().prepareStatement(sql);
 			stmt.setTimestamp(1, new java.sql.Timestamp(after.getTime()));
 			stmt.setString(2, below + "%");
 			// stmt.setInt(3, limit + 1);
-			logger.info("start executing sql_selectDoneDirectories");
+			logger.info("start executing selectDoneDirectories.sql");
 			ResultSet result = stmt.executeQuery();
-			logger.info("finished executing sql_selectDoneDirectories, start iterating");
+			logger.info("finished executing selectDoneDirectories.sql, start iterating");
 			HashSet<String> returnVal = new HashSet<>();
 
 			String addedLast = null;
@@ -103,10 +105,11 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 					return null;
 			}
 			stmt.close();
-			logger.info("finished iterating sql_selectDoneDirectories");
+			logger.info("finished iterating selectDoneDirectories.sql");
 
 			// stmt =
-			// db.getConnection().prepareStatement("SELECT path FROM directories WHERE finished IS NOT NULL AND path LIKE ?");
+			// db.getConnection().prepareStatement("SELECT path FROM directories
+			// WHERE finished IS NOT NULL AND path LIKE ?");
 			// stmt.setString(1, "/media/kaefert/%");
 
 			if (returnVal.size() <= limit)
@@ -121,12 +124,14 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	}
 
 	/**
-	 * @see com.googlecode.directory_scanner.contracts.DatabaseWorker#getDirectoryDoneAfter(java.lang.String, java.util.Date)
+	 * @see com.googlecode.directory_scanner.contracts.DatabaseWorker#getDirectoryDoneAfter(java.lang.String,
+	 *      java.util.Date)
 	 */
 	@Override
 	public boolean getDirectoryDoneAfter(String path, Date after) {
 		try {
-			PreparedStatement stmt = db.getConnection().prepareStatement("SELECT count(id) FROM directories WHERE finished > ? AND path = ?");
+			PreparedStatement stmt = db.getConnection()
+					.prepareStatement("SELECT count(id) FROM directories WHERE finished > ? AND path = ?");
 			stmt.setTimestamp(1, new java.sql.Timestamp(after.getTime()));
 			stmt.setString(2, path);
 			ResultSet result = stmt.executeQuery();
@@ -148,7 +153,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
 			try {
 				logger.debug("starting loading directoryId for path = " + key);
-				PreparedStatement stmt = db.getConnection().prepareStatement("SELECT id FROM directories where path = ?");
+				PreparedStatement stmt = db.getConnection()
+						.prepareStatement("SELECT id FROM directories where path = ?");
 				stmt.setString(1, key);
 				ResultSet result = stmt.executeQuery();
 				Integer id = null;
@@ -177,7 +183,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	@Override
 	public Integer getDirectoryId(String path, boolean createIfNotExists) {
 		if (dirIdCache == null) {
-			dirIdCache = CacheBuilder.newBuilder().maximumSize(Long.valueOf(config.getProperty("cacheDirIds"))).build(dirIdLoader);
+			dirIdCache = CacheBuilder.newBuilder().maximumSize(Long.valueOf(config.getProperty("cacheDirIds")))
+					.build(dirIdLoader);
 		}
 		try {
 			Integer dirId = dirIdCache.get(path).orNull();
@@ -196,8 +203,9 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	}
 
 	/**
-	 * Only use this method if you either already have the id of the directory and only want to update it, or if you are certain that the directory does not
-	 * exist jet in the database you can pass a null as @dirId
+	 * Only use this method if you either already have the id of the directory
+	 * and only want to update it, or if you are certain that the directory does
+	 * not exist jet in the database you can pass a null as @dirId
 	 * 
 	 * @return dirId
 	 */
@@ -216,10 +224,12 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 				PreparedStatement stmt = null;
 
 				if (finished) {
-					stmt = db.getConnection().prepareStatement("UPDATE directories SET scanDir_id = ?, finished = ? WHERE id = ?");
+					stmt = db.getConnection()
+							.prepareStatement("UPDATE directories SET scanDir_id = ?, finished = ? WHERE id = ?");
 				} else {
 					finishedTimestamp = new java.sql.Timestamp(new java.util.Date().getTime());
-					stmt = db.getConnection().prepareStatement("UPDATE directories SET scanDir_id = ?, scandate = ? WHERE id = ?");
+					stmt = db.getConnection()
+							.prepareStatement("UPDATE directories SET scanDir_id = ?, scandate = ? WHERE id = ?");
 				}
 
 				if (scanDir == null)
@@ -288,18 +298,23 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	}
 
 	@Override
-	public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1) {
+	public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir,
+			FileTime lastModified, long size, byte[] sha1) {
 		return insertFile(fullPath, fileName, getDirectoryId(containingDir, true), scanDir, lastModified, size, sha1);
 	}
 
 	@Override
-	public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1, Integer fileId) {
-		return insertFile(fullPath, fileName, getDirectoryId(containingDir, true), scanDir, lastModified, size, sha1, fileId);
+	public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir,
+			FileTime lastModified, long size, byte[] sha1, Integer fileId) {
+		return insertFile(fullPath, fileName, getDirectoryId(containingDir, true), scanDir, lastModified, size, sha1,
+				fileId);
 	}
 
-	private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1) {
+	private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified,
+			long size, byte[] sha1) {
 		try {
-			PreparedStatement stmt = db.getConnection().prepareStatement("SELECT id FROM files WHERE dir_id = ? and filename = ?");
+			PreparedStatement stmt = db.getConnection()
+					.prepareStatement("SELECT id FROM files WHERE dir_id = ? and filename = ?");
 			stmt.setInt(1, containingDir);
 			stmt.setString(2, fileName);
 			ResultSet result = stmt.executeQuery();
@@ -339,7 +354,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		}
 	}
 
-	private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1, Integer fileId) {
+	private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified,
+			long size, byte[] sha1, Integer fileId) {
 
 		logger.info((fileId == null ? "inserting" : "updating") + " file; size=" + size + "; path=" + fullPath);
 
@@ -381,7 +397,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	@Override
 	public void insertFailure(String fullPath, int scanRoot, long size, long bytesRead, String error) {
 
-		logger.info("inserting failure, size=" + size + ", bytesRead=" + bytesRead + ", path=" + fullPath + ", error=" + error);
+		logger.info("inserting failure, size=" + size + ", bytesRead=" + bytesRead + ", path=" + fullPath + ", error="
+				+ error);
 
 		try {
 			PreparedStatement stmt = db.getConnection().prepareStatement(
@@ -417,7 +434,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	@Override
 	public void forgetFile(int dirId, String filename) {
 		try {
-			PreparedStatement stmt = db.getConnection().prepareStatement("DELETE FROM files WHERE dir_id = ? AND filename = ?");
+			PreparedStatement stmt = db.getConnection()
+					.prepareStatement("DELETE FROM files WHERE dir_id = ? AND filename = ?");
 			stmt.setInt(1, dirId);
 			stmt.setString(2, filename);
 			stmt.execute();
@@ -428,13 +446,15 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	}
 
 	/**
-	 * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String, java.lang.String, boolean,
+	 * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String,
+	 *      java.lang.String, boolean,
 	 *      com.googlecode.directory_scanner.domain.ReportMatch.Sort)
 	 */
 	@Override
-	public BlockingQueue<ReportMatch> findFiles(final String path1, final String path2, final boolean duplicates, final Sort sort) {
+	public BlockingQueue<ReportMatch> findFiles(final String path1F, final String path2F, final boolean duplicates,
+			final Sort sort, final FindFilter filter) {
 
-		if (path1 == null)
+		if (path1F == null)
 			throw new IllegalArgumentException("path1 must not be null!");
 
 		final BlockingQueue<ReportMatch> queue = new ArrayBlockingQueue<>(config.getQueueLength());
@@ -443,39 +463,54 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 			@Override
 			public void run() {
 
+				String path1 = path1F;
+				String path2 = path2F;
+				
+				if(path2 != null && path2.contains(path1)) {
+					/* switch paths because if overlapping, path1 must be the more general one (see selectFilesWithDuplicatesBelowPath.sql)*/
+					path1 = path2F;
+					path2 = path1F;
+				}
+				
 				try {
 					indexesReportingMode();
+					
 					String sql;
 					if (duplicates) {
 						if (path2 == null)
-							sql = config.getProperty("sql_selectFilesWithDuplicatesBelowPath");
+							sql = config.readSqlFromClasspath("selectFilesWithDuplicatesBelowPath.sql");
 						else if (path1.equals(path2))
-							sql = config.getProperty("sql_selectFilesWithMoreDuplicatesBelowPath");
-						else
-							sql = config.getProperty("sql_selectFilesWithDuplicatesBelowTwoPaths");
+							sql = config.readSqlFromClasspath("selectFilesWithMoreDuplicatesBelowPath.sql");
+						else {
+							sql = config.readSqlFromClasspath("selectFilesWithDuplicatesBelowTwoPaths.sql");
+							sql += "\n" + filter.getSQL();
+						}
+
 					} else {
 						if (path2 == null)
-							sql = config.getProperty("sql_selectFilesBelowPath");
+							sql = config.readSqlFromClasspath("selectFilesBelowPath.sql");
 						else
-							sql = config.getProperty("sql_selectFilesBelowPath1NotBelowPath2");
+							sql = config.readSqlFromClasspath("selectFilesBelowPath1NotBelowPath2.sql");
 					}
 
 					logger.info("Starting findFiles Select Query");
-					PreparedStatement stmt = db.getConnection().prepareStatement(sql + sort.getSQL());
+					sql += "\n" + sort.getSQL();
+					logger.debug("findFiles sql: \n\n" + sql);
+					PreparedStatement stmt = db.getConnection().prepareStatement(sql);
 					stmt.setString(1, path1 + "%");
 
 					if (path2 != null) {
 						if (duplicates && path1.equals(path2))
 							stmt.setInt(2, 2);
-						else
+						else {
 							stmt.setString(2, path2 + "%");
+						}
 					}
 
 					ResultSet result = stmt.executeQuery();
 					logger.info("finished findFiles Select Query - starting to iterate result set");
 					ReportMatch current = null;
 					while (result.next()) {
-
 						String dirPath = result.getString(1);
 						// int dirId = result.getInt(2);
 						String filename = result.getString(3);
@@ -487,11 +522,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
 						if (current == null || !Arrays.equals(current.getSha1(), sha1)) {
 							if (current != null) {
-								try {
-									queue.put(current);
-								} catch (InterruptedException e) {
-									logger.error("could not put ReportMatch into queue", e);
-								}
+								queue.put(current);
 							}
 							current = new ReportMatch(sha1, size);
 						}
@@ -512,7 +543,9 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 					logger.info("finished findFiles iterating result set");
 
 				} catch (SQLException e) {
-					logger.error("forgetDirectoryTree failed - SQLException", e);
+					logger.error("findFiles failed - SQLException", e);
+				} catch (InterruptedException e) {
+					logger.error("could not put ReportMatch into queue", e);
 				}
 
 			}
@@ -535,27 +568,32 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 					tryExecute("CREATE INDEX sha1_size ON files (sha1, size)");
 
 					logger.debug("finished creating index, starting findSha1Collisions");
-					PreparedStatement s1cPS = db.getConnection().prepareStatement(config.getProperty("sql_selectSha1Collisions"));
+					PreparedStatement s1cPS = db.getConnection()
+							.prepareStatement(config.readSqlFromClasspath("selectSha1Collisions.sql"));
 					ResultSet s1cRS = s1cPS.executeQuery();
 					while (s1cRS.next()) {
 						byte[] sha1 = s1cRS.getBytes(1);
-						PreparedStatement s1dPS = db.getConnection().prepareStatement(config.getProperty("sql_selectSha1Details"));
+						PreparedStatement s1dPS = db.getConnection()
+								.prepareStatement(config.readSqlFromClasspath("selectSha1Details.sql"));
 						s1dPS.setBytes(1, sha1);
 						ResultSet s1dRS = s1dPS.executeQuery();
 						ReportMatch rm = new ReportMatch(sha1, -1);
 						rm.setMetadata("SHA1 Collision! sha1=" + AppConfig.getSha1HexString(sha1));
 						while (s1dRS.next()) {
-							rm.getStore().add(
-									new StoredFile(s1dRS.getString("path"), s1dRS.getString("filename"), s1dRS.getLong("size"), s1dRS
-											.getTimestamp("lastmodified"), s1dRS.getTimestamp("scandate")));
+							rm.getStore()
+									.add(new StoredFile(s1dRS.getString("path"), s1dRS.getString("filename"),
+											s1dRS.getLong("size"), s1dRS.getTimestamp("lastmodified"),
+											s1dRS.getTimestamp("scandate")));
 						}
 						s1dPS.close();
 						queue.put(rm);
 					}
 					s1cPS.close();
-					logger.debug("finished itterating sha1Collisions and loading details for them. starting to check for directories that have been inserted multiple times");
+					logger.debug(
+							"finished itterating sha1Collisions and loading details for them. starting to check for directories that have been inserted multiple times");
 
-					PreparedStatement ddPS = db.getConnection().prepareStatement(config.getProperty("sql_selectDirectoryDuplicates"));
+					PreparedStatement ddPS = db.getConnection()
+							.prepareStatement(config.readSqlFromClasspath("selectDirectoryDuplicates.sql"));
 					ResultSet ddRS = ddPS.executeQuery();
 					logger.debug("finished query selectDirectoryDuplicates, start iterating");
 					while (ddRS.next()) {
@@ -564,37 +602,45 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 						rm.getStore().add(new StoredFile(ddRS.getString(1), "", -1, null, null));
 						queue.put(rm);
 					}
-					logger.debug("finished iterating DirectoryDuplicates, will now try to create unique constraint ON files (filename, dir_id)");
+					logger.debug(
+							"finished iterating DirectoryDuplicates, will now try to create unique constraint ON files (filename, dir_id)");
 					ddPS.close();
 
-					PreparedStatement dfPS = db.getConnection().prepareStatement("CREATE UNIQUE INDEX filename_dir ON files (filename, dir_id);");
+					PreparedStatement dfPS = db.getConnection()
+							.prepareStatement("CREATE UNIQUE INDEX filename_dir ON files (filename, dir_id);");
 
 					try {
 						dfPS.execute();
 					} catch (SQLException e) {
-						if (e.getMessage().contains("Duplicate key name") || e.getMessage().contains("already exists")) {
-							logger.info("unique constraint ON files (filename, dir_id) already exists, therefore this problem cannot exist; SQLException="
-									+ e.getMessage());
+						if (e.getMessage().contains("Duplicate key name")
+								|| e.getMessage().contains("already exists")) {
+							logger.info(
+									"unique constraint ON files (filename, dir_id) already exists, therefore this problem cannot exist; SQLException="
+											+ e.getMessage());
 						} else {
-							logger.warn("could not create unique index, exception = " + e.getMessage() + " (starting sql_selectWrongFileDuplicates)");
+							logger.warn("could not create unique index, exception = " + e.getMessage()
+									+ " (starting selectWrongFileDuplicates.sql)");
 
 							ReportMatch rm = new ReportMatch(null, -1);
 							rm.setMetadata("files that have the same dir_id & filename exist!");
 							rm.getStore().add(new StoredFile(e.getMessage(), "", -1, null, null));
 							queue.put(rm);
 
-							PreparedStatement dfdPS = db.getConnection().prepareStatement(config.getProperty("sql_selectWrongFileDuplicates"));
+							PreparedStatement dfdPS = db.getConnection()
+									.prepareStatement(config.readSqlFromClasspath("selectWrongFileDuplicates.sql"));
 							ResultSet dfdRS = dfdPS.executeQuery();
-							logger.debug("finished sql_selectWrongFileDuplicates executeQuery, start iterating resultset");
+							logger.debug(
+									"finished selectWrongFileDuplicates.sql executeQuery, start iterating resultset");
 							while (dfdRS.next()) {
 								int dirId = dfdRS.getInt("dir_id");
 								String filename = dfdRS.getString("filename");
 								int fileId = dfdRS.getInt("id");
 								ReportMatch rm2 = new ReportMatch(null, -1);
-								rm2.setMetadata("WrongFileDuplicate, dirid=" + dirId + ", filename=" + filename + ", file_id=" + fileId);
+								rm2.setMetadata("WrongFileDuplicate, dirid=" + dirId + ", filename=" + filename
+										+ ", file_id=" + fileId);
 								queue.put(rm2);
 							}
-							logger.debug("finished iterating resultset of sql_selectWrongFileDuplicates");
+							logger.debug("finished iterating resultset of selectWrongFileDuplicates.sql");
 
 						}
 					} finally {
@@ -624,7 +670,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 			public void run() {
 
 				try {
-					PreparedStatement stmt = db.getConnection().prepareStatement("SELECT path FROM directories WHERE path LIKE ?");
+					PreparedStatement stmt = db.getConnection()
+							.prepareStatement("SELECT path FROM directories WHERE path LIKE ?");
 					stmt.setString(1, path + '%');
 					ResultSet result = stmt.executeQuery();
 
@@ -694,7 +741,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
 	private void deleteOldFailures() {
 		try {
-			PreparedStatement stmt = db.getConnection().prepareStatement(config.getProperty("sql_delete_old_failure_duplicates"));
+			PreparedStatement stmt = db.getConnection()
+					.prepareStatement(config.readSqlFromClasspath("deleteOldFailureDuplicates.sql"));
 			stmt.execute();
 			stmt.close();
 		} catch (SQLException e) {
@@ -733,7 +781,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 			return null;
 
 		try {
-			PreparedStatement stmt = db.getConnection().prepareStatement(config.getProperty("sql_selectFileDetails"));
+			PreparedStatement stmt = db.getConnection()
+					.prepareStatement(config.readSqlFromClasspath("selectFileDetails.sql"));
 			stmt.setString(1, dir);
 			stmt.setString(2, fileName);
 			ResultSet result = stmt.executeQuery();
@@ -764,7 +813,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 	private Set<String> getIndexNames() {
 
 		HashSet<String> returnVal = new HashSet<>();
-		String sql = db.isUsingFallback() ? "SELECT * FROM information_schema.indexes WHERE table_name='FILES'" : "SHOW INDEX FROM files";
+		String sql = db.isUsingFallback() ? "SELECT * FROM information_schema.indexes WHERE table_name='FILES'"
+				: "SHOW INDEX FROM files";
 		try {
 			PreparedStatement stmt = db.getConnection().prepareStatement(sql);
 			ResultSet result = stmt.executeQuery();
@@ -870,7 +920,8 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		try {
 			return stmt.execute();
 		} catch (SQLException e) {
-			logger.warn("could not execute stmt: " + stmt.toString().substring(db.isUsingFallback() ? 7 : 48) + " ; SQLException=" + e.getMessage());
+			logger.warn("could not execute stmt: " + stmt.toString().substring(db.isUsingFallback() ? 7 : 48)
+					+ " ; SQLException=" + e.getMessage());
 			return false;
 		}
 	}

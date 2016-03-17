@@ -16,6 +16,8 @@ import java.util.Properties;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import com.google.common.io.ByteStreams;
+
 public class AppConfig extends Properties {
 
 	/**
@@ -201,6 +203,28 @@ public class AppConfig extends Properties {
 			} else
 				profiles.add(existingProfile);
 			i++;
+		}
+	}
+
+
+	private static final String sqlDir = "com/googlecode/directory_scanner/sql/";
+	
+	public String readSqlFromClasspath(String sqlName) {
+		return readFileFromClasspath(sqlDir + sqlName);
+	}
+
+	public String readFileFromClasspath(String fileName) {
+	//		URI uri = getClass().getClassLoader().getResource(fileName).toURI();
+	//		return new String(Files.readAllBytes(Paths.get(uri)));
+		
+		InputStream stream = getClass().getClassLoader().getResourceAsStream(fileName);
+		byte[] bytes;
+		try {
+			bytes = ByteStreams.toByteArray(stream);
+			return new String(bytes);
+		} catch (IOException e) {
+			logger.fatal("could not readFileFromClasspath: " + fileName, e);
+			throw new RuntimeException("could not readFileFromClasspath: " + fileName, e);
 		}
 	}
 }

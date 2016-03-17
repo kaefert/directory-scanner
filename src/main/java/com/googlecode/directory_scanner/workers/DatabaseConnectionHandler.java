@@ -6,7 +6,6 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -14,13 +13,13 @@ import org.apache.log4j.Logger;
 public class DatabaseConnectionHandler {
 
 	private Logger logger;
-	private Properties appConfig;
+	private AppConfig appConfig;
 	private boolean useFallback = false;
 
 	private String profile = null;
 	private Map<String, Connection> connections = null;
 
-	public DatabaseConnectionHandler(Logger logger, Properties config) {
+	public DatabaseConnectionHandler(Logger logger, AppConfig config) {
 		this.logger = logger;
 		this.appConfig = config;
 		this.profile = config.getProperty("ProfileName1");
@@ -148,7 +147,7 @@ public class DatabaseConnectionHandler {
 		try {
 			Connection global = getConnection();
 			if (global != null) {
-				String sql = appConfig.getProperty("sql_createTableDirectories");
+				String sql = appConfig.readSqlFromClasspath("createTableDirectories.sql");
 				if (isUsingFallback())
 					sql = sql.replace(" ENGINE=InnoDB", "");
 				PreparedStatement createTable = global.prepareStatement(sql);
@@ -170,7 +169,7 @@ public class DatabaseConnectionHandler {
 		try {
 			Connection global = getConnection();
 			if (global != null) {
-				String sql = appConfig.getProperty("sql_createTableFiles");
+				String sql = appConfig.readSqlFromClasspath("createTableFiles.sql");
 				if (isUsingFallback())
 					sql = sql.replace(" ENGINE=InnoDB", "");
 				PreparedStatement createTable = global.prepareStatement(sql);
@@ -192,7 +191,7 @@ public class DatabaseConnectionHandler {
 		try {
 			Connection global = getConnection();
 			if (global != null) {
-				String sql = appConfig.getProperty("sql_createTableFailures");
+				String sql = appConfig.readSqlFromClasspath("createTableFailures.sql");
 				if (isUsingFallback())
 					sql = sql.replace(" ENGINE=InnoDB", "");
 				PreparedStatement createTable = global.prepareStatement(sql);

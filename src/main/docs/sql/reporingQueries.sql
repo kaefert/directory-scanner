@@ -98,7 +98,8 @@ WHERE ( /* at least given number of those duplicates are within the given path *
 /**************************************************/
 /*** sql_selectFilesWithDuplicatesBelowTwoPaths ***/
 /**************************************************/
-SELECT 
+SELECT
+/* selected file has no path limit */
 	d.path, 
 	d.id, 
 	f.filename, 
@@ -164,3 +165,33 @@ OR EXISTS ( /* files with same name and path but different id */
 	AND dd2.path = d.path 
 ) 
 ORDER BY f.sha1
+
+
+
+
+/**************************************************/
+/*** sql_selectFilesWithDuplicatesBelowTwoPaths ***/
+/**************************************************/
+/* too simple: resultset only contains files in path1! */
+
+/* a file below path1 */ 
+SELECT 
+	d.path, 
+	d.id, 
+	f.filename, 
+	f.id, 
+	f.size, 
+	f.scandate, 
+	f.sha1, 
+	f.lastmodified 
+FROM files f 
+INNER JOIN directories d 
+	ON d.id = f.dir_id 
+WHERE d.path LIKE ? 
+AND EXISTS ( /* with duplicates in path2 */ 
+	SELECT ff.id 
+	FROM files ff 
+	INNER JOIN directories dd 
+		ON dd.id = ff.dir_id 
+	WHERE ff.sha1 = f.sha1 
+	AND dd.path LIKE ? 

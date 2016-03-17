@@ -50,7 +50,7 @@
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
-			<version>1.3.168</version>
+			<version>1.3.176</version>
 		</dependency>
 
 
@@ -63,6 +63,9 @@
 		<resources>
 			<resource>
 				<directory>src/main/java</directory>
+			</resource>
+			<resource>
+				<directory>src/main/resources</directory>
 			</resource>
 			<resource>
 				<directory>.</directory>
@@ -94,7 +97,6 @@
 					<target>${compiler.version}</target>
 					<showDeprecation>true</showDeprecation>
 					<showWarnings>true</showWarnings>
-					<executable>/usr/lib/jvm/java-7-openjdk-amd64/bin/javac</executable>
 					<fork>true</fork>
 				</configuration>
 			</plugin>
@@ -110,6 +112,7 @@
 						<include>**/log4j.xml</include>
 						<include>**/*.java</include>
 						<include>**/*.class</include>
+						<include>**/*.sql</include>
 					</includes>
 
 					<archive>

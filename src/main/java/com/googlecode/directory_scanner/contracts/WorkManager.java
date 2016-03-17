@@ -3,7 +3,9 @@ package com.googlecode.directory_scanner.contracts;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
+import com.googlecode.directory_scanner.domain.FindFilter;
 import com.googlecode.directory_scanner.domain.ReportMatch;
+import com.googlecode.directory_scanner.domain.Sort;
 import com.googlecode.directory_scanner.domain.VisitFailure;
 
 public interface WorkManager {
@@ -58,7 +60,7 @@ public interface WorkManager {
      * 
      * @return
      */
-    public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, ReportMatch.Sort sort);
+    public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort, FindFilter filter);
     
     public BlockingQueue<ReportMatch> findProblems();
     

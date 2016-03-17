@@ -28,11 +28,12 @@ import com.googlecode.directory_scanner.contracts.DatabaseWorker;
 import com.googlecode.directory_scanner.contracts.SkipDirectoryDecider;
 import com.googlecode.directory_scanner.contracts.SkipFileDecider;
 import com.googlecode.directory_scanner.contracts.WorkManager;
+import com.googlecode.directory_scanner.domain.FindFilter;
 import com.googlecode.directory_scanner.domain.PathVisit;
 import com.googlecode.directory_scanner.domain.PathVisit.Type;
 import com.googlecode.directory_scanner.domain.ReportMatch;
-import com.googlecode.directory_scanner.domain.ReportMatch.Sort;
 import com.googlecode.directory_scanner.domain.ScanJob;
+import com.googlecode.directory_scanner.domain.Sort;
 import com.googlecode.directory_scanner.domain.StoredFile;
 import com.googlecode.directory_scanner.domain.VisitFailure;
 
@@ -83,8 +84,8 @@ public class WorkManagerImpl implements WorkManager {
 	}
 
 	/**
-     * 
-     */
+	 * 
+	 */
 	public WorkManagerImpl(Logger logger, AppConfig config, DatabaseWorker db) {
 		this.logger = logger;
 		this.config = config;
@@ -151,7 +152,8 @@ public class WorkManagerImpl implements WorkManager {
 					db.forgetDirectoryTree(dbPath);
 				}
 				// else {
-				// logger.trace("directory from db still exists in filesystem (do nothing) -> "
+				// logger.trace("directory from db still exists in filesystem
+				// (do nothing) -> "
 				// + dbPath);
 				// }
 
@@ -161,7 +163,7 @@ public class WorkManagerImpl implements WorkManager {
 		}
 		//
 
-		BlockingQueue<ReportMatch> fileQueue = db.findFiles(path, null, false, Sort.NOSORT);
+		BlockingQueue<ReportMatch> fileQueue = db.findFiles(path, null, false, Sort.SHA1, FindFilter.UNFILTERED);
 
 		final Integer scanDir = db.getDirectoryId(path, true);
 
@@ -179,7 +181,8 @@ public class WorkManagerImpl implements WorkManager {
 					Path ioPath = Paths.get(stored.getFullPath());
 
 					try {
-						BasicFileAttributes attr = Files.readAttributes(ioPath, BasicFileAttributes.class, new LinkOption[] {});
+						BasicFileAttributes attr = Files.readAttributes(ioPath, BasicFileAttributes.class,
+								new LinkOption[] {});
 
 						String problem = "";
 						if (attr.size() != stored.getSize()) {
@@ -264,7 +267,9 @@ public class WorkManagerImpl implements WorkManager {
 				}
 
 			} catch (InterruptedException e) {
-				logger.error("interrupted while taking VisitFailure from queue, or putting into walkerInput or walkerOutput queue", e);
+				logger.error(
+						"interrupted while taking VisitFailure from queue, or putting into walkerInput or walkerOutput queue",
+						e);
 			}
 		}
 	}
@@ -278,13 +283,15 @@ public class WorkManagerImpl implements WorkManager {
 	}
 
 	/**
-	 * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String, java.lang.String,
-	 *      boolean, com.googlecode.directory_scanner.domain.ReportMatch.Sort)
+	 * @see com.googlecode.directory_scanner.contracts.WorkManager#findFiles(java.lang.String,
+	 *      java.lang.String, boolean,
+	 *      com.googlecode.directory_scanner.domain.ReportMatch.Sort)
 	 */
 	@Override
-	public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort) {
+	public BlockingQueue<ReportMatch> findFiles(String path1, String path2, boolean duplicates, Sort sort,
+			FindFilter filter) {
 		waitForWalkers();
-		return db.findFiles(path1, path2, duplicates, sort);
+		return db.findFiles(path1, path2, duplicates, sort, filter);
 	}
 
 	@Override
@@ -294,7 +301,8 @@ public class WorkManagerImpl implements WorkManager {
 	}
 
 	@Override
-	public void moveOrCopyMatches(final BlockingQueue<ReportMatch> queue, final String from, final String to, final boolean copy, final boolean flatten) {
+	public void moveOrCopyMatches(final BlockingQueue<ReportMatch> queue, final String from, final String to,
+			final boolean copy, final boolean flatten) {
 		Thread processor = new Thread(new Runnable() {
 			@Override
 			public void run() {
@@ -337,7 +345,8 @@ public class WorkManagerImpl implements WorkManager {
 
 				if (copy) {
 					copyFile(stored.getFullPath(), target);
-					// copyFile(new File(stored.getFullPath()), new File(target));
+					// copyFile(new File(stored.getFullPath()), new
+					// File(target));
 				} else {
 					moveFile(stored.getFullPath(), target);
 				}
@@ -375,15 +384,15 @@ public class WorkManagerImpl implements WorkManager {
 		// Path targetPath = fs.getPath(target);
 
 		// Method1 : use java.nio.file.Files.copy
-		Path srcFile = Paths.get(source);
-		Path targetFile = Paths.get(target);
+		Path srcPath = Paths.get(source);
+		Path targePath = Paths.get(target);
 
 		// configure how to copy or move a file.
 		CopyOption[] options = new CopyOption[] { StandardCopyOption.COPY_ATTRIBUTES };
 
 		// Copy srcFile to targetFile
 		try {
-			Files.copy(srcFile, targetFile, options);
+			Files.copy(srcPath, targePath, options);
 			return true;
 		} catch (IOException e1) {
 			e1.printStackTrace();
@@ -409,30 +418,31 @@ public class WorkManagerImpl implements WorkManager {
 		// }
 
 		// Method3 : using filechannels (doesn't preserve timestamps!)
-		FileChannel sourceChnl = null;
-		FileChannel destination = null;
+		FileInputStream fileInputStream = null;
+		FileOutputStream fileOutputStream = null;
 		try {
 			if (!destFile.exists()) {
 				destFile.createNewFile();
 			}
-			sourceChnl = new FileInputStream(sourceFile).getChannel();
-			destination = new FileOutputStream(destFile).getChannel();
-			destination.transferFrom(sourceChnl, 0, sourceChnl.size());
+			fileInputStream = new FileInputStream(sourceFile);
+			fileOutputStream = new FileOutputStream(destFile);
+			FileChannel sourceChnl = fileInputStream.getChannel();
+			fileOutputStream.getChannel().transferFrom(sourceChnl, 0, sourceChnl.size());
 		} catch (IOException e) {
 			e.printStackTrace();
 			return false;
 		} finally {
-			if (sourceChnl != null) {
+			if (fileInputStream != null) {
 				try {
-					sourceChnl.close();
+					fileInputStream.close();
 				} catch (IOException e) {
 					e.printStackTrace();
 					return false;
 				}
 			}
-			if (destination != null) {
+			if (fileOutputStream != null) {
 				try {
-					destination.close();
+					fileOutputStream.close();
 				} catch (IOException e) {
 					e.printStackTrace();
 					return false;
@@ -440,7 +450,6 @@ public class WorkManagerImpl implements WorkManager {
 			}
 		}
 		return true;
-
 	}
 
 	private void waitForWalkers() {

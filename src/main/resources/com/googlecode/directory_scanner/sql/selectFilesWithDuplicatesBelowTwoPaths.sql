@@ -1,9 +1,5 @@
-/**** ASSUMPTIONS ****/
-/* if one of the paths is contained in the other, the more general one must be the first! */
-/* the second path needs to be given as parameter 2 & 3 */
-
 SELECT
-/* selected file has no path limit */
+/* select any files with matching sha1 & size */
 	d.path, 
 	d.id, 
 	f.filename, 

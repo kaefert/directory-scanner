@@ -1,6 +1,6 @@
 package com.googlecode.directory_scanner.contracts;
 
-import java.nio.file.attribute.FileTime;
+import java.sql.Timestamp;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.concurrent.BlockingQueue;
@@ -28,9 +28,9 @@ public interface DatabaseWorker {
 
     public Integer getDirectoryId(String path, boolean createIfNotExists);
 
-    public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1);
+    public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, Timestamp lastModified, long size, byte[] sha1);
     
-    public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, FileTime lastModified, long size, byte[] sha1, Integer fileId);
+    public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir, Timestamp lastModified, long size, byte[] sha1, Integer fileId);
     
     public void insertFailure(String fullPath, int scanRoot, long size, long bytesRead, String failure);
 

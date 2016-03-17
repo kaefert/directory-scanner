@@ -13,6 +13,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 
+import javax.xml.bind.DatatypeConverter;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
@@ -24,6 +26,8 @@ public class AppConfig extends Properties {
      * 
      */
 	private static final long serialVersionUID = 2402741572495774673L;
+	
+	public static final Date earliestDateAccepted = DatatypeConverter.parseDateTime("1981-01-01T00:00:00-01:00").getTime();
 
 	public static String getSha1HexString(byte[] sha1) {
 		if (sha1 == null)

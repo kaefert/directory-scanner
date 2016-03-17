@@ -2,6 +2,7 @@ package com.googlecode.directory_scanner.workers;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
+import java.sql.Timestamp;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -131,10 +132,11 @@ public class PathVisitProcessor {
 				// sanity check succeeded, insert using the supplied data
 				String fileName = pathVisit.getPath().getFileName().toString();
 				String directory = pathVisit.getPath().getParent().toString();
+				Timestamp lastModified = new Timestamp(pathVisit.getLastModified().toMillis());
 				if (pathVisit.haveCheckedDB())
-					db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), pathVisit.getLastModified(), pathVisit.getSize(), pathVisit.getSha1(), pathVisit.getDBId());
+					db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), lastModified, pathVisit.getSize(), pathVisit.getSha1(), pathVisit.getDBId());
 				else
-					db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), pathVisit.getLastModified(), pathVisit.getSize(), pathVisit.getSha1());
+					db.insertFile(fullPath, fileName, directory, pathVisit.getScanRoot(), lastModified, pathVisit.getSize(), pathVisit.getSha1());
 			} else {
 				// sanity check failed. insert file as FAILURE
 				db.insertFailure(fullPath, pathVisit.getScanRoot(), pathVisit.getSize(), pathVisit.getBytesRead(), "different sizes!");

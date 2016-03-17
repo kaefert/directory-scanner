@@ -69,4 +69,6 @@ public interface WorkManager {
     public BlockingQueue<VisitFailure> getFailuresBelow(String path);
     
     public void moveOrCopyMatches(BlockingQueue<ReportMatch> queue, String from, String to, boolean copy, boolean flatten);
+    
+    public void importFilesFromOtherProfile(String otherProfile, String pathToImport);
 }

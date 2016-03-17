@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.sql.Timestamp;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -459,6 +460,34 @@ public class WorkManagerImpl implements WorkManager {
 				this.wait(1000);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
+			} catch (IllegalMonitorStateException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	@Override
+	public void importFilesFromOtherProfile(String otherProfile, String pathToImport) {
+		DatabaseWorkerImpl otherDB = new DatabaseWorkerImpl(logger, config);
+		otherDB.setProfile(otherProfile);
+		BlockingQueue<ReportMatch> fileQueue = otherDB.findFiles(pathToImport, null, false, Sort.SHA1, FindFilter.UNFILTERED);
+		int importDirId = db.getDirectoryId(pathToImport, true);
+		while (true) {
+			try {
+				ReportMatch reportMatch = fileQueue.take();
+
+				if (reportMatch == ReportMatch.endOfQueue) {
+					// scanQueue.put(PathVisit.endOfQueue);
+					break;
+				}
+
+				for (StoredFile stored : reportMatch.getStore()) {
+					Timestamp lastModified = new Timestamp(stored.getLastModified().getTime());
+					db.insertFile(stored.getFullPath(), stored.getFileName(), stored.getDirPath(), importDirId, lastModified, stored.getSize(), reportMatch.getSha1());
+				}
+
+			} catch (InterruptedException e) {
+				logger.error("interrupted while taking ReportMatch from queue (or putting into scanQeue)", e);
 			}
 		}
 	}

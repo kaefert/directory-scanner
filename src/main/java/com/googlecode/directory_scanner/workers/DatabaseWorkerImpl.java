@@ -3,7 +3,6 @@
  */
 package com.googlecode.directory_scanner.workers;
 
-import java.nio.file.attribute.FileTime;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -299,18 +298,18 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 
 	@Override
 	public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir,
-			FileTime lastModified, long size, byte[] sha1) {
+			Timestamp lastModified, long size, byte[] sha1) {
 		return insertFile(fullPath, fileName, getDirectoryId(containingDir, true), scanDir, lastModified, size, sha1);
 	}
 
 	@Override
 	public Integer insertFile(String fullPath, String fileName, String containingDir, int scanDir,
-			FileTime lastModified, long size, byte[] sha1, Integer fileId) {
+			Timestamp lastModified, long size, byte[] sha1, Integer fileId) {
 		return insertFile(fullPath, fileName, getDirectoryId(containingDir, true), scanDir, lastModified, size, sha1,
 				fileId);
 	}
 
-	private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified,
+	private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, Timestamp lastModified,
 			long size, byte[] sha1) {
 		try {
 			PreparedStatement stmt = db.getConnection()
@@ -331,7 +330,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		}
 	}
 
-	private void updateFile(int fileId, int scanDir, FileTime lastModified, long size, byte[] sha1) {
+	private void updateFile(int fileId, int scanDir, Timestamp lastModified, long size, byte[] sha1) {
 		try {
 			PreparedStatement stmt = db.getConnection().prepareStatement(
 					"UPDATE files SET scanDir_id = ?, size = ?, sha1 = ?, scandate = ?, lastmodified = ? WHERE id = ?");
@@ -342,7 +341,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 			stmt.setBytes(3, sha1);
 
 			stmt.setTimestamp(4, new java.sql.Timestamp(new java.util.Date().getTime()));
-			stmt.setTimestamp(5, new Timestamp(lastModified.toMillis()));
+			stmt.setTimestamp(5, lastModified);
 			stmt.setInt(6, fileId);
 			stmt.execute();
 			stmt.close();
@@ -354,7 +353,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 		}
 	}
 
-	private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, FileTime lastModified,
+	private Integer insertFile(String fullPath, String fileName, int containingDir, int scanDir, Timestamp lastModified,
 			long size, byte[] sha1, Integer fileId) {
 
 		logger.info((fileId == null ? "inserting" : "updating") + " file; size=" + size + "; path=" + fullPath);
@@ -373,7 +372,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 				stmt.setBytes(4, sha1);
 				Timestamp timestamp = new Timestamp(new java.util.Date().getTime());
 				stmt.setTimestamp(5, timestamp);
-				stmt.setTimestamp(6, new Timestamp(lastModified.toMillis()));
+				stmt.setTimestamp(6, lastModified);
 				stmt.setLong(7, size);
 				stmt.execute();
 				stmt.close();

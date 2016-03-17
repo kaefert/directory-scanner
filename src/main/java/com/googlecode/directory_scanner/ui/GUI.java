@@ -60,7 +60,7 @@ public class GUI {
 
 	private JLabel projectStatLabel = new JLabel("Current: Default");
 	private JRadioButtonMenuItem sortSha1, sortSize, sortCount, sortSizeCount, reportAll, reportPath1, report1stPath1,
-			reportNotPath1, reportAllBut1stPath1, reportPath2, report1stPath2, reportNotPath2, reportAllBut1stPath2,
+			reportNotPath1, reportAllBut1stPath1, reportPath2, report1stPath2, reportNotPath2, reportAllBut1stPath2, reportTouchBash,
 			actionScopeAll, actionScopeOlder, actionScopeOlderEquals, performActionForEquals, performActionForNewerEquals, performActionForNewer;
 	private JCheckBoxMenuItem reportMetadata, autoScanReport, autoScanAction, flattenTarget;
 
@@ -374,7 +374,7 @@ public class GUI {
 		tabPane = new JTabbedPane();
 		// centerPanel.setLayout(new CardLayout());
 		tabPane.add(statusPanel, "Status");
-		tabPane.add(fileListScrollPane, "Files");
+		tabPane.add(fileListScrollPane, "Output");
 
 		contentPane.add(northPanel, BorderLayout.NORTH);
 		contentPane.add(tabPane, BorderLayout.CENTER);
@@ -419,11 +419,33 @@ public class GUI {
 			}
 		});
 		projMenu.add(np);
+		
+		JMenuItem importPath = new JMenuItem(new AbstractAction("Import Path1% from other Profile") {
+
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+
+				String s = (String) JOptionPane.showInputDialog(frmDirectoryScanner, "Enter the Profile-Name:",
+						"Customized Dialog", JOptionPane.PLAIN_MESSAGE);
+
+				// If a string was returned, say so.
+				if ((s != null) && (s.length() > 0)) {
+					worker.importFilesFromOtherProfile(s, txtPath1.getText());
+				} else {
+					JOptionPane.showMessageDialog(frmDirectoryScanner,
+							"You did not enter a profile-name, canceling import.");
+				}
+			}
+		});
+		projMenu.add(importPath);
+		
 		projMenu.addSeparator();
 
 		for (final String profile : worker.getProfileList()) {
 			addProjSelectItem(projMenu, profile);
 		}
+		
+		
 		return projMenu;
 	}
 
@@ -858,11 +880,11 @@ public class GUI {
 		report1stPath1 = new JRadioButtonMenuItem("report first Path1%");
 		reportNotPath1 = new JRadioButtonMenuItem("report all but Path1%");
 		reportAllBut1stPath1 = new JRadioButtonMenuItem("report all but first Path1%");
-
 		reportPath2 = new JRadioButtonMenuItem("report any Path2%");
 		report1stPath2 = new JRadioButtonMenuItem("report first Path2%");
 		reportNotPath2 = new JRadioButtonMenuItem("report all but Path2%");
 		reportAllBut1stPath2 = new JRadioButtonMenuItem("report all but first Path2%");
+		reportTouchBash = new JRadioButtonMenuItem("output dates preserver script");
 
 		ButtonGroup reportOptions = new ButtonGroup();
 		reportOptions.add(reportAll);
@@ -870,22 +892,22 @@ public class GUI {
 		reportOptions.add(report1stPath1);
 		reportOptions.add(reportNotPath1);
 		reportOptions.add(reportAllBut1stPath1);
-
 		reportOptions.add(reportPath2);
 		reportOptions.add(report1stPath2);
 		reportOptions.add(reportNotPath2);
 		reportOptions.add(reportAllBut1stPath2);
+		reportOptions.add(reportTouchBash);
 
 		reportMenu.add(reportAll);
 		reportMenu.add(reportPath1);
 		reportMenu.add(report1stPath1);
 		reportMenu.add(reportNotPath1);
 		reportMenu.add(reportAllBut1stPath1);
-
 		reportMenu.add(reportPath2);
 		reportMenu.add(report1stPath2);
 		reportMenu.add(reportNotPath2);
 		reportMenu.add(reportAllBut1stPath2);
+		reportMenu.add(reportTouchBash);
 
 		reportMenu.addSeparator();
 
@@ -1073,7 +1095,7 @@ public class GUI {
 						logger.error("reportMatchesProcessor was interrupted", e);
 					}
 				}
-				txtrFileList.append("end of report.");
+				txtrFileList.append("############### end of report ###############");
 			}
 		});
 		processor.start();
@@ -1081,7 +1103,7 @@ public class GUI {
 
 	private void reportSingleMatch(ReportMatch match) {
 		if (reportMetadata.isSelected()) {
-			txtrFileList.append("\n" + match.getMetadata() + "\n");
+			txtrFileList.append("\n### " + match.getMetadata() + "\n");
 			// Match sha1=" + AppConfig.getSha1HexString(match.getSha1()) + ";
 			// size=" + match.getSize() + ";
 			// count=" + match.getStore().size() + ";
@@ -1149,6 +1171,40 @@ public class GUI {
 					} else {
 						txtrFileList.append(file.getFullPath() + "\n");
 					}
+				}
+			}
+		} else if (reportTouchBash.isSelected()) {
+			// we assume:
+			// 1.) path1 = the directory that contains the current and future structure
+			// 2.) some of the files below path2 might have an older timestamp than the file
+			//     with the same content in path1 and we want to preserve that older timestamp
+			//     by outputting a call to touch that copies it to the path1 versions.
+			
+			// subtask1: find the oldest timestamp in the ReportMatch:
+			StoredFile earliest = null;
+			for (StoredFile file : match.getStore()) {
+				Date check = file.getLastModified();
+				if(earliest == null || (earliest.getLastModified().after(check) && check.after(AppConfig.earliestDateAccepted)))
+					earliest = file;
+			}
+			txtrFileList.append("# earliest timestamp = " + earliest.getLastModified() + " - from file: \"" + earliest.getFullPath() + "\"\n");
+
+			// subtask2: output touch command for all later file instances below path1 to set to earliest timestamp:
+			for (StoredFile file : match.getStore()) {
+				if (file.getDirPath().startsWith(txtPath1.getText())
+						&& file.getLastModified().after(earliest.getLastModified())) {
+					txtrFileList.append("# overwrite timestamp = " + file.getLastModified() + " in path1: \n");
+					String touch = "touch -d \"$(date -R -r \"" + earliest.getFullPath() + "\")\" \"" + file.getFullPath() + "\""; 
+					txtrFileList.append(touch + "\n");
+				}
+			}
+			
+			txtrFileList.append("# delete duplicates below path2: \n");
+			// subtask3: output rm statement for all file instances below path2:
+			for (StoredFile file : match.getStore()) {
+				if (file.getDirPath().startsWith(txtPath2.getText())) {
+					String touch = "rm \"" + file.getFullPath() + "\""; 
+					txtrFileList.append(touch + "\n");
 				}
 			}
 		}

@@ -491,4 +491,14 @@ public class WorkManagerImpl implements WorkManager {
 			}
 		}
 	}
+
+	@Override
+	public void quitWhenFinished() {
+		if (walkerInputQueue != null) {
+			walkerInputQueue.add(ScanJob.endOfQueue);
+		}
+		if (visitProcessor != null) {
+			visitProcessor.quitWhenFinished();
+		}
+	}
 }

@@ -155,4 +155,9 @@ public class PathVisitProcessor {
 	public boolean isWorking() {
 		return working;
 	}
+
+	public void quitWhenFinished() {
+		if(dbInsertQueue != null) dbInsertQueue.add(PathVisit.endOfQueue);
+		if(queue != null) queue.add(PathVisit.endOfQueue);
+	}
 }

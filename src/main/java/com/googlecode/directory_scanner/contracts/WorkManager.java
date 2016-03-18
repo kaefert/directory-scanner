@@ -71,4 +71,6 @@ public interface WorkManager {
     public void moveOrCopyMatches(BlockingQueue<ReportMatch> queue, String from, String to, boolean copy, boolean flatten);
     
     public void importFilesFromOtherProfile(String otherProfile, String pathToImport);
+
+	public void quitWhenFinished();
 }

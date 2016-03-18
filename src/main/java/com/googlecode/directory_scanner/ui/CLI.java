@@ -111,6 +111,7 @@ public class CLI {
 		System.out.println("");
 		logger.log(Level.INFO, "end of DirectoryScanner -> static void main");
 
+		worker.quitWhenFinished();
 	}
 
 	private void printHelp(boolean error) {

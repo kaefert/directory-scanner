@@ -11,7 +11,8 @@ SELECT
 FROM files f 
 INNER JOIN directories d 
 	ON d.id = f.dir_id 
-WHERE EXISTS ( /* 2 distinct duplicates below 2 paths given by parameter */
+WHERE f.size > 0 
+AND EXISTS ( /* 2 distinct duplicates below 2 paths given by parameter */
 	SELECT f1.id
 	FROM files f1
 	INNER JOIN files f2

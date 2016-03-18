@@ -18,3 +18,4 @@ WHERE ( /* at least given number of those duplicates are within the given path *
 	WHERE ff2.sha1 = f.sha1 
 	AND dd2.path LIKE ? 
 ) >= ?
+AND f.size > 0

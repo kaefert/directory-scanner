@@ -41,8 +41,8 @@ import org.apache.log4j.spi.LoggingEvent;
 import com.googlecode.directory_scanner.contracts.WorkManager;
 import com.googlecode.directory_scanner.domain.FindFilter;
 import com.googlecode.directory_scanner.domain.ReportMatch;
+import com.googlecode.directory_scanner.domain.ReportMatch.ReportMode;
 import com.googlecode.directory_scanner.domain.Sort;
-import com.googlecode.directory_scanner.domain.StoredFile;
 import com.googlecode.directory_scanner.domain.VisitFailure;
 import com.googlecode.directory_scanner.workers.AppConfig;
 
@@ -1102,112 +1102,35 @@ public class GUI {
 	}
 
 	private void reportSingleMatch(ReportMatch match) {
-		if (reportMetadata.isSelected()) {
-			txtrFileList.append("\n### " + match.getMetadata() + "\n");
-			// Match sha1=" + AppConfig.getSha1HexString(match.getSha1()) + ";
-			// size=" + match.getSize() + ";
-			// count=" + match.getStore().size() + ";
-			// totalSize=" + match.getSize()*match.getStore().size() + "\n");
-		}
+		String path1 = txtPath1.getText(), path2 = txtPath2.getText();
+		ReportMode mode = null;
+		
 		if (reportAll.isSelected()) {
-			for (StoredFile file : match.getStore()) {
-				txtrFileList.append(file.getFullPath() + "\n");
-			}
+			mode = ReportMode.ALL;
 		} else if (reportPath1.isSelected()) {
-			for (StoredFile file : match.getStore()) {
-				if (file.getFullPath().startsWith(txtPath1.getText()))
-					txtrFileList.append(file.getFullPath() + "\n");
-			}
+			mode = ReportMode.PATH;
 		} else if (reportPath2.isSelected()) {
-			for (StoredFile file : match.getStore()) {
-				if (file.getFullPath().startsWith(txtPath2.getText()))
-					txtrFileList.append(file.getFullPath() + "\n");
-			}
+			mode = ReportMode.PATH;
+			path1 = path2;
 		} else if (reportNotPath1.isSelected()) {
-			for (StoredFile file : match.getStore()) {
-				if (!file.getFullPath().startsWith(txtPath1.getText()))
-					txtrFileList.append(file.getFullPath() + "\n");
-			}
+			mode = ReportMode.NOTPATH;
 		} else if (reportNotPath2.isSelected()) {
-			for (StoredFile file : match.getStore()) {
-				if (!file.getFullPath().startsWith(txtPath2.getText()))
-					txtrFileList.append(file.getFullPath() + "\n");
-			}
+			mode = ReportMode.NOTPATH;
+			path1 = path2;
 		} else if (report1stPath1.isSelected()) {
-			for (StoredFile file : match.getStore()) {
-				if (file.getFullPath().startsWith(txtPath1.getText())) {
-					txtrFileList.append(file.getFullPath() + "\n");
-					break;
-				}
-			}
+			mode = ReportMode.FIRSTPATH;
 		} else if (report1stPath2.isSelected()) {
-			for (StoredFile file : match.getStore()) {
-				if (file.getFullPath().startsWith(txtPath2.getText())) {
-					txtrFileList.append(file.getFullPath() + "\n");
-					break;
-				}
-			}
+			mode = ReportMode.FIRSTPATH;
+			path1 = path2;
 		} else if (reportAllBut1stPath1.isSelected()) {
-			boolean firstSkipped = false;
-			for (StoredFile file : match.getStore()) {
-				if (firstSkipped) {
-					txtrFileList.append(file.getFullPath() + "\n");
-				} else {
-					if (file.getFullPath().startsWith(txtPath1.getText())) {
-						firstSkipped = true;
-					} else {
-						txtrFileList.append(file.getFullPath() + "\n");
-					}
-				}
-			}
+			mode = ReportMode.ALLBUT1STPATH;
 		} else if (reportAllBut1stPath2.isSelected()) {
-			boolean firstSkipped = false;
-			for (StoredFile file : match.getStore()) {
-				if (firstSkipped) {
-					txtrFileList.append(file.getFullPath() + "\n");
-				} else {
-					if (file.getFullPath().startsWith(txtPath2.getText())) {
-						firstSkipped = true;
-					} else {
-						txtrFileList.append(file.getFullPath() + "\n");
-					}
-				}
-			}
+			mode = ReportMode.ALLBUT1STPATH;
+			path1 = path2;
 		} else if (reportTouchBash.isSelected()) {
-			// we assume:
-			// 1.) path1 = the directory that contains the current and future structure
-			// 2.) some of the files below path2 might have an older timestamp than the file
-			//     with the same content in path1 and we want to preserve that older timestamp
-			//     by outputting a call to touch that copies it to the path1 versions.
-			
-			// subtask1: find the oldest timestamp in the ReportMatch:
-			StoredFile earliest = null;
-			for (StoredFile file : match.getStore()) {
-				Date check = file.getLastModified();
-				if(earliest == null || (earliest.getLastModified().after(check) && check.after(AppConfig.earliestDateAccepted)))
-					earliest = file;
-			}
-			txtrFileList.append("# earliest timestamp = " + earliest.getLastModified() + " - from file: \"" + earliest.getFullPath() + "\"\n");
-
-			// subtask2: output touch command for all later file instances below path1 to set to earliest timestamp:
-			for (StoredFile file : match.getStore()) {
-				if (file.getDirPath().startsWith(txtPath1.getText())
-						&& file.getLastModified().after(earliest.getLastModified())) {
-					txtrFileList.append("# overwrite timestamp = " + file.getLastModified() + " in path1: \n");
-					String touch = "touch -d \"$(date -R -r \"" + earliest.getFullPath() + "\")\" \"" + file.getFullPath() + "\""; 
-					txtrFileList.append(touch + "\n");
-				}
-			}
-			
-			txtrFileList.append("# delete duplicates below path2: \n");
-			// subtask3: output rm statement for all file instances below path2:
-			for (StoredFile file : match.getStore()) {
-				if (file.getDirPath().startsWith(txtPath2.getText())) {
-					String touch = "rm \"" + file.getFullPath() + "\""; 
-					txtrFileList.append(touch + "\n");
-				}
-			}
+			mode = ReportMode.PreserveTimestampScript;
 		}
+		txtrFileList.append(match.getReport(reportMetadata.isSelected(), mode, path1, path2));
 	}
 
 	private void reportFailures(final BlockingQueue<VisitFailure> failuresBelow) {

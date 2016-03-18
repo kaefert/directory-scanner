@@ -1,0 +1,37 @@
+Welcome to DirectoryScanner Version [[VERSION]]
+
+If you want to use the the GUI, don't pass arguments. 
+If you want to use the CLI, adjust your arguments to the description below:
+
+definition: "duplicates": multiple distinct files with same content (with different paths and or filenames)
+
+profile name
+--> switches to the h2 database directory-scanner_name.h2.db
+
+scan path
+--> scans the path
+
+rescan path
+--> removes path% from the doneDirectories + scans the path
+
+check_exists path
+--> goes through the paths in the database that are below the given path
+
+reset_done_directories
+--> dont skip directories
+
+report_any path
+--> reports any files stored in db below path% (includes duplicates of those files elsewhere)
+
+report_duplicates1 path
+--> reports any duplicates stored in db below path%
+
+report_duplicates2 path1 path2
+--> reports any files which has duplicates in both path1% and path2%
+
+report_mode mode
+--> sets the report_mode for any report commands following this.
+--> available modes: ALL, PATH, NOTPATH, FIRSTPATH, ALLBUT1STPATH, PreserveTimestampScript
+
+import path fromProfileName
+--> imports any files that are stored in other db "fromProfileName" into the current profile.

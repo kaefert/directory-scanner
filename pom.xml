@@ -4,7 +4,7 @@
 
 	<groupId>com.googlecode.directory-scanner</groupId>
 	<artifactId>directory-scanner</artifactId>
-	<version>0.0.6</version>
+	<version>0.0.7</version>
 	<packaging>jar</packaging>
 
 	<name>directory-scanner</name>
@@ -119,6 +119,8 @@
 						<manifest>
 							<addClasspath>true</addClasspath>
 							<mainClass>com.googlecode.directory_scanner.Main</mainClass>
+							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+							<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
 						</manifest>
 					</archive>
 				</configuration>
@@ -129,7 +131,10 @@
 				<configuration>
 					<archive>
 						<manifest>
+							<addClasspath>true</addClasspath>
 							<mainClass>com.googlecode.directory_scanner.Main</mainClass>
+							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+							<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
 						</manifest>
 					</archive>
 					<descriptorRefs>

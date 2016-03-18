@@ -23,6 +23,7 @@ public class DatabaseConnectionHandler {
 		this.logger = logger;
 		this.appConfig = config;
 		this.profile = config.getProperty("ProfileName1");
+		this.useFallback = ("1".equals(config.getProperty("dbFallBackUseAsDefault")));
 	}
 
 	public boolean isUsingFallback() {
@@ -32,23 +33,23 @@ public class DatabaseConnectionHandler {
 	public void setProfile(String profile) {
 		disconnectAll(connections);
 		connections = null;
-		useFallback = false;
+		useFallback = true;
 		this.profile = profile;
 	}
 
 	public Connection getConnection() {
-		return getConnection(appConfig.getProperty("databaseName"));
+		return getConnection("");
 	}
 
 	private Connection getConnection(String databaseName) {
 		if (connections == null) {
 			connections = new HashMap<String, Connection>();
 		}
+		
+		if (connections.get(databaseName) != null)
+			return connections.get(databaseName);
 
 		if (isUsingFallback())
-			return connections.get("");
-
-		if ("1".equals(appConfig.getProperty("dbFallBackUseAsDefault")))
 			return getFallbackDatabase();
 
 		if (connections.get(databaseName) == null) {
@@ -134,7 +135,7 @@ public class DatabaseConnectionHandler {
 			}
 			logger.log(Level.INFO, "Disconnected all open database-connections.");
 		} else {
-			logger.log(Level.INFO, "No database-connections have been opened.");
+			logger.log(Level.INFO, "disconnectAll: No database-connections have been opened.");
 		}
 	}
 

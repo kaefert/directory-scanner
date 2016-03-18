@@ -459,9 +459,9 @@ public class WorkManagerImpl implements WorkManager {
 			try {
 				this.wait(1000);
 			} catch (InterruptedException e) {
-				e.printStackTrace();
+				logger.fatal("waitForWalkers.wait(1000) failed!", e);
 			} catch (IllegalMonitorStateException e) {
-				e.printStackTrace();
+				logger.fatal("waitForWalkers.wait(1000) failed!", e);
 			}
 		}
 	}
@@ -494,11 +494,22 @@ public class WorkManagerImpl implements WorkManager {
 
 	@Override
 	public void quitWhenFinished() {
+		logger.debug("WorkManagerImpl.quitWhenFinished() called - wait a while to make sure everything started");
+		try {
+			//make sure everything started alright
+			this.wait(5000);
+		} catch (InterruptedException e) {
+			logger.fatal("quitWhenFinished.wait(x) failed!", e);
+		}
+		logger.debug("WorkManagerImpl.quitWhenFinished() called - waiting for walkers to finish");
+		waitForWalkers();
+		logger.debug("WorkManagerImpl.quitWhenFinished() called - walkers finished! adding endOfQueue to all queues!");
 		if (walkerInputQueue != null) {
 			walkerInputQueue.add(ScanJob.endOfQueue);
 		}
 		if (visitProcessor != null) {
 			visitProcessor.quitWhenFinished();
 		}
+		logger.debug("WorkManagerImpl.quitWhenFinished() finished! program will for all likeliness exit now");
 	}
 }

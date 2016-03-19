@@ -457,7 +457,7 @@ public class WorkManagerImpl implements WorkManager {
 		while ((walkerInputQueue != null && (!walkerInputQueue.isEmpty() || getWalker().isWorking()))
 				&& (walkerOutputQueue != null && (!walkerOutputQueue.isEmpty() || visitProcessor.isWorking()))) {
 			try {
-				this.wait(1000);
+				Thread.sleep(1000);
 			} catch (InterruptedException e) {
 				logger.fatal("waitForWalkers.wait(1000) failed!", e);
 			} catch (IllegalMonitorStateException e) {
@@ -497,7 +497,7 @@ public class WorkManagerImpl implements WorkManager {
 		logger.debug("WorkManagerImpl.quitWhenFinished() called - wait a while to make sure everything started");
 		try {
 			//make sure everything started alright
-			this.wait(5000);
+			Thread.sleep(2000);                 //1000 milliseconds is one second.
 		} catch (InterruptedException e) {
 			logger.fatal("quitWhenFinished.wait(x) failed!", e);
 		}

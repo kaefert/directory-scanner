@@ -113,6 +113,7 @@
 						<include>**/*.java</include>
 						<include>**/*.class</include>
 						<include>**/*.sql</include>
+						<include>**/*.txt</include>
 					</includes>
 
 					<archive>

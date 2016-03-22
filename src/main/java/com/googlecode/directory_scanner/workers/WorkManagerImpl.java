@@ -115,15 +115,15 @@ public class WorkManagerImpl implements WorkManager {
 	@Override
 	public void scanPath(String path) {
 
-		if ("1".equals(config.getProperty("dropIndexesBeforeScan")))
-			db.indexesInsertingMode();
-
 		db.forgetFailuresBelow(path);
 
 		Date after = config.getSkipDirectoriesDoneAfter();
 		int cacheDoneDirectories = Integer.parseInt(config.getProperty("cacheDoneDirectories"));
 		SkipDirectoryDecider skipDecider = new SkipDirectoryDeciderImpl(path, after, cacheDoneDirectories, db, logger);
 		Integer scanDirId = db.getDirectoryId(path, true);
+
+		if ("1".equals(config.getProperty("dropIndexesBeforeScan")))
+			db.indexesInsertingMode();
 
 		try {
 			getWalkerInputQueue().put(new ScanJob(path, scanDirId, skipDecider));
@@ -494,22 +494,25 @@ public class WorkManagerImpl implements WorkManager {
 
 	@Override
 	public void quitWhenFinished() {
-		logger.debug("WorkManagerImpl.quitWhenFinished() called - wait a while to make sure everything started");
-		try {
-			//make sure everything started alright
-			Thread.sleep(2000);                 //1000 milliseconds is one second.
-		} catch (InterruptedException e) {
-			logger.fatal("quitWhenFinished.wait(x) failed!", e);
-		}
-		logger.debug("WorkManagerImpl.quitWhenFinished() called - waiting for walkers to finish");
-		waitForWalkers();
-		logger.debug("WorkManagerImpl.quitWhenFinished() called - walkers finished! adding endOfQueue to all queues!");
+		
+//		logger.debug("WorkManagerImpl.quitWhenFinished() called - wait a while to make sure everything started");
+//		try {
+//			//make sure everything started alright
+//			Thread.sleep(2000);                 //1000 milliseconds is one second.
+//		} catch (InterruptedException e) {
+//			logger.fatal("quitWhenFinished.wait(x) failed!", e);
+//		}
+//		logger.debug("WorkManagerImpl.quitWhenFinished() called - waiting for walkers to finish");
+//		waitForWalkers();
+//		logger.debug("WorkManagerImpl.quitWhenFinished() called - walkers finished! adding endOfQueue to all queues!");
+
+		logger.debug("WorkManagerImpl.quitWhenFinished() called - add endOfQueue to walkerInputQueue");
 		if (walkerInputQueue != null) {
 			walkerInputQueue.add(ScanJob.endOfQueue);
 		}
-		if (visitProcessor != null) {
-			visitProcessor.quitWhenFinished();
-		}
-		logger.debug("WorkManagerImpl.quitWhenFinished() finished! program will for all likeliness exit now");
+//		if (visitProcessor != null) {
+//			visitProcessor.quitWhenFinished();
+//		}
+//		logger.debug("WorkManagerImpl.quitWhenFinished() finished! program will for all likeliness exit now");
 	}
 }

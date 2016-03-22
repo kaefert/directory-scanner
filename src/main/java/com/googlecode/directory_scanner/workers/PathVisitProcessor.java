@@ -16,7 +16,7 @@ import com.googlecode.directory_scanner.workers.ChecksumSHA1Calculator.Sha1WithS
 
 public class PathVisitProcessor {
 
-	private BlockingQueue<PathVisit> queue, dbInsertQueue;
+	private BlockingQueue<PathVisit> hashQueue, dbInsertQueue;
 	private DatabaseWorker db;
 	private Logger logger;
 	private SkipFileDecider skipDecider;
@@ -25,7 +25,7 @@ public class PathVisitProcessor {
 
 	public PathVisitProcessor(BlockingQueue<PathVisit> queue, Logger logger, DatabaseWorker db,
 			SkipFileDecider skipDecider, AppConfig config) {
-		this.queue = queue;
+		this.hashQueue = queue;
 		this.logger = logger;
 		this.db = db;
 		this.skipDecider = skipDecider;
@@ -36,7 +36,7 @@ public class PathVisitProcessor {
 		new Thread(new Runnable() {
 			@Override
 			public void run() {
-				process();
+				processHashQueue();
 			}
 		}).start();
 
@@ -48,16 +48,18 @@ public class PathVisitProcessor {
 		}).start();
 	}
 
-	private void process() {
+	private void processHashQueue() {
 		while (true) {
 			try {
 				working = false;
-				PathVisit pathVisit = queue.take();
+				PathVisit pathVisit = hashQueue.take();
 				working = true;
 				handlePathVisit(pathVisit);
 
-				if (pathVisit == PathVisit.endOfQueue)
+				if (pathVisit == PathVisit.endOfQueue) {
+					dbInsertQueue.add(PathVisit.endOfQueue);
 					break;
+				}	
 
 			} catch (InterruptedException e) {
 				e.printStackTrace();
@@ -158,6 +160,6 @@ public class PathVisitProcessor {
 
 	public void quitWhenFinished() {
 		if(dbInsertQueue != null) dbInsertQueue.add(PathVisit.endOfQueue);
-		if(queue != null) queue.add(PathVisit.endOfQueue);
+		if(hashQueue != null) hashQueue.add(PathVisit.endOfQueue);
 	}
 }

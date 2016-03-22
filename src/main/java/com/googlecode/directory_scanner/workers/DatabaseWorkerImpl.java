@@ -466,7 +466,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 				String path2 = path2F;
 				
 				if(path2 != null && path2.contains(path1)) {
-					/* switch paths because if overlapping, path1 must be the more general one (see selectFilesWithDuplicatesBelowPath.sql)*/
+					/* switch paths because if overlapping, path1 must be the more general one (see selectFilesWithDuplicatesBelowTwoPaths.sql)*/
 					path1 = path2F;
 					path2 = path1F;
 				}

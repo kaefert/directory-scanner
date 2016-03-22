@@ -50,8 +50,10 @@ public class DirectoryTreeWalker extends SimpleFileVisitor<Path> {
 						ScanJob scanJob = inputQueue.take();
 						working = true;
 
-						if (ScanJob.endOfQueue.equals(scanJob))
+						if (ScanJob.endOfQueue.equals(scanJob)) {
+							outputQueue.add(PathVisit.endOfQueue);
 							break;
+						}	
 
 						walkDirectory(scanJob);
 

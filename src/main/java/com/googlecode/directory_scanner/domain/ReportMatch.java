@@ -79,8 +79,13 @@ public class ReportMatch {
 			StoredFile earliest = null;
 			for (StoredFile file : getStore()) {
 				Date check = file.getLastModified();
+				if(!file.getDirPath().contains(path1) && !file.getDirPath().contains(path2))
+					continue; //only timestamp of copies within our 2 relevant dirs count
+				
 				if(earliest == null || (earliest.getLastModified().after(check) && check.after(AppConfig.earliestDateAccepted)))
 					earliest = file;
+				else if(check.equals(earliest) && file.getDirPath().contains(path1) && !file.getDirPath().contains(path2))
+					earliest = file; //if multiple earliest timestamps exist, take one within path1 instead of path2
 			}
 			report += "# earliest timestamp = " + earliest.getLastModified() + " - from file: \"" + earliest.getFullPath() + "\"\n";
 

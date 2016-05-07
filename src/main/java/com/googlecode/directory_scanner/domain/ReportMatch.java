@@ -72,6 +72,7 @@ public class ReportMatch {
 			// 2.) some of the files below path2 might have an older timestamp than the file
 			//     with the same content in path1 and we want to preserve that older timestamp
 			//     by outputting a call to touch that copies it to the path1 versions.
+			// 3.) path2 might be a subdirectory of path1, so path1 might contain path2
 			
 			boolean matchHasInstancesBelowPath1 = false;
 			
@@ -91,11 +92,14 @@ public class ReportMatch {
 
 			// subtask2: output touch command for all later file instances below path1 to set to earliest timestamp:
 			for (StoredFile file : getStore()) {
-				if (file.getDirPath().startsWith(path1)) {
+				if (file.getDirPath().startsWith(path1) && !file.getDirPath().startsWith(path2) ) {
 					matchHasInstancesBelowPath1 = true;
 					if(file.getLastModified().after(earliest.getLastModified())) {
 						report += "# overwrite timestamp = " + file.getLastModified() + " in path1: \n" +
-								"touch -d \"$(date -R -r \"" + earliest.getFullPath() + "\")\" \"" + file.getFullPath() + "\"\n";
+								"touch -d \"" + earliest.getLastModified() + "\" \"" + file.getFullPath() + "\"\n";
+					}
+					else {
+						report += "# path1 instance already has oldest timestamp: \"" + file.getFullPath() + "\"\n";
 					}
 				}
 			}

@@ -503,6 +503,7 @@ public class DatabaseWorkerImpl implements DatabaseWorker {
 							stmt.setInt(2, 2);
 						else {
 							stmt.setString(2, path2 + "%");
+							stmt.setString(3, path2 + "%");
 						}
 					}
 

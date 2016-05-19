@@ -26,5 +26,6 @@ AND EXISTS ( /* 2 distinct duplicates below 2 paths given by parameter */
 	WHERE f1.sha1 = f.sha1
 	  AND f1.size = f.size
 	  AND d1.path LIKE ?
+	  AND d1.path NOT LIKE ?
 	  AND d2.path LIKE ?
 /* subselect is not closed here, added filter code closes it */
